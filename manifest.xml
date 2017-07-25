@@ -1,0 +1,16 @@
+<package>
+  <description brief="aruco_tracker">
+
+     aruco_tracker
+
+  </description>
+  <author>maksim</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/aruco_tracker</url>
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+
+</package>
+
+
