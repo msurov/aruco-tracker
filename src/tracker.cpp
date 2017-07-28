@@ -29,7 +29,7 @@ static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_ti
         if (p_detector)
         {
             Mat im(Ny, Nx, CV_8U, (void*)data);
-            map<int, Matx44f> markers;
+            map<int, marker_t> markers;
             p_detector->detect(im, markers);
 
             auto m_origin = markers.find(38);
@@ -37,16 +37,16 @@ static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_ti
 
             if (m_origin != markers.end() && m_obj != markers.end())
             {
-            	Matx44f T_origin = m_origin->second;
-            	Matx44f T_obj = m_obj->second;
-            	Matx44f T = T_origin.inv() * T_obj;
+                Matx44f T_origin = m_origin->second.T;
+                Matx44f T_obj = m_obj->second.T;
+                Matx44f T = T_origin.inv() * T_obj;
 
-            	geometry_msgs::Pose pose;
-            	pose.position.x = 1000.f * T(0,3);
-            	pose.position.y = 1000.f * T(1,3);
-            	pose.position.z = 1000.f * T(2,3);
-            	pub.publish(pose);
-            	dbg_msg("found: ", pose.position.x, " ", pose.position.y, " ", pose.position.z);
+                geometry_msgs::Pose pose;
+                pose.position.x = T(0,3);
+                pose.position.y = T(1,3);
+                pose.position.z = T(2,3);
+                pub.publish(pose);
+                dbg_msg("found: ", pose.position.x, " ", pose.position.y, " ", pose.position.z);
             }
         }
     }
@@ -70,8 +70,6 @@ void run_tracker(jsonxx::Object const& cfg)
     set_sigterm_handler(pf);
 
     p_detector = get_aruco_detector(cfg);
-    // Mat im = cv::imread("../data/Image__2017-07-25__01-19-25.png", 0);
-    // p_detector->detect(im);
 
     init_camera(cfg);
     get_camera()->set_handler(camera_handler);
@@ -87,21 +85,33 @@ int main(int argc, char* argv[])
 {
     make_arg_list args({
         { { "-c", "--config" }, "config", "path to tracker config file", "", true },
+        { { "-i", "--image" }, "image", "path to an image to process", "", false }
     });
 
     try
     {
-	    ros::init(argc, argv, node_name);
-	    node.reset(new ros::NodeHandle());
-    	pub = node->advertise<geometry_msgs::Pose>(pub_name, 10);
-
         auto p = args.parse(argc, argv);
         string configpath = p["config"];
         auto cfg = json_load(configpath);
 
-        traces_init(cfg);
-        imgdump_init(cfg);
-        run_tracker(cfg);
+        if (p.find("image") != p.end())
+        {
+            p_detector = get_aruco_detector(cfg);
+            Mat im = cv::imread(p["image"], 0);
+            map<int, marker_t> markers;
+            p_detector->detect(im, markers);
+        }
+        else
+        {
+            ros::init(argc, argv, node_name);
+            node.reset(new ros::NodeHandle());
+            pub = node->advertise<geometry_msgs::Pose>(pub_name, 10);
+
+            traces_init(cfg);
+            imgdump_init(cfg);
+            run_tracker(cfg);
+        }
+
     }
     catch (invalid_argument& e)
     {
@@ -114,6 +124,6 @@ int main(int argc, char* argv[])
         err_msg(e.what());
         return -1;
     }
-   
+
     return 0;
 }

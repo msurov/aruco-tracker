@@ -9,6 +9,28 @@ T inline sign(T const& a)
     return a > static_cast<T>(0) ? static_cast<T>(1) : static_cast<T>(-1);
 } 
 
+struct marker_t
+{
+    cv::Matx44f T;
+    cv::Point2f c1, c2, c3, c4;
+
+    inline cv::Point3f pos() const
+    {
+        cv::Point3f res(T(0,3), T(1,3), T(2,3));
+        return res;
+    }
+
+    inline cv::Matx33f R() const
+    {
+        cv::Matx33f R(
+             T(0,0), T(0,1), T(0,2),
+             T(1,0), T(1,1), T(1,2),
+             T(2,0), T(2,1), T(2,2)
+        );
+        return R;
+    }
+};
+
 class ArucoDetector
 {
 private:
@@ -19,7 +41,10 @@ private:
     std::vector<cv::Point2f> m_aligned_quad;
 
 public:
-    ArucoDetector(int nrows, float side, cv::Matx33f const& K, std::vector<float> const& distortion)
+    ArucoDetector(
+        int nrows, float side, cv::Matx33f const& K, 
+        std::vector<float> const& distortion
+        )
     {
         int v = 
             nrows == 4 ? cv::aruco::DICT_4X4_250 : 
@@ -39,7 +64,7 @@ public:
         m_aligned_quad.push_back(cv::Point2f(0, 0));
     }
 
-    void detect(cv::Mat const& im, std::map<int, cv::Matx44f>& markers)
+    void detect(cv::Mat const& im, std::map<int, marker_t>& markers)
     {
         std::vector<std::vector<cv::Point2f>> quads;
         std::vector<int> ids;
@@ -65,23 +90,17 @@ public:
             cv::Point3f ey = cv::Point3f(P(0,1), P(1,1), P(2,1));
             cv::Point3f ez = ex.cross(ey);
 
-            // v2
-            // cv::Matx33f H = findHomography(m_aligned_quad, q);
-            // H = m_K.inv() * H;
-            // auto c = H.col(0);
-            // float k = sqrtf(c.dot(c));
-            // H = H * (1.f / k);
-
-            // cout << k << endl;
-            // cout << id << " " << H.col(2) << endl;
-
             cv::Matx44f T = cv::Matx44f(
                 ex.x, ey.x, ez.x, P(0,2),
                 ex.y, ey.y, ez.y, P(1,2),
                 ex.z, ey.z, ez.z, P(2,2),
                    0,    0,    0,      1
             );
-            markers[id] = T;
+            markers[id].T = T;
+            markers[id].c1 = q[0];
+            markers[id].c2 = q[1];
+            markers[id].c3 = q[2];
+            markers[id].c4 = q[3];
         }
     }
 };

@@ -24,7 +24,7 @@ rosbuild_add_executable(aruco_tracker
 	src/cv_helpers.cpp
 	src/cv_helpers.h
 	src/cv_parallel.h
-	src/main_camera.cpp
+	src/tracker.cpp
 	src/camera_basler1300_200uc.cpp
 	src/camera.h
 )

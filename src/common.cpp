@@ -111,12 +111,12 @@ std::string get_digits_substr(std::string const& s)
 {
     tuple<int, int> lims(0,0);
 
-    for (int i = 0; i < s.size(); ++i)
+    for (int i = 0; i < (int)s.size(); ++i)
     {
         if (isdigit(s[i]))
         {
             int start = i;
-            while (i < s.size() && isdigit(s[i]))
+            while (i < (int)s.size() && isdigit(s[i]))
                 ++i;
             int end = i;
 
@@ -193,10 +193,10 @@ bool __match_mask(string const& name, string const& mask, int iname, int imask)
 {
     while (true)
     {
-        if (iname == name.size())
+        if (iname == (int)name.size())
             break;
 
-        if (imask == mask.size())
+        if (imask == (int)mask.size())
             return false;
 
         char c = mask[imask];
@@ -204,7 +204,7 @@ bool __match_mask(string const& name, string const& mask, int iname, int imask)
         switch (c)
         {
         case '*':
-            for (int iname1 = iname; iname1 <= name.size(); ++ iname1)
+            for (int iname1 = iname; iname1 <= (int)name.size(); ++ iname1)
             {
                 if (__match_mask(name, mask, iname1, imask + 1))
                     return true;
@@ -223,7 +223,7 @@ bool __match_mask(string const& name, string const& mask, int iname, int imask)
         }
     }
 
-    if (imask == mask.size())
+    if (imask == (int)mask.size())
         return true;
 
     return false;
