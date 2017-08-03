@@ -5,12 +5,10 @@ project(aruco_tracker)
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
 
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
-set(ROS_BUILD_TYPE Release)
-rosbuild_init()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -mtune=native -Ofast")
 
-add_definitions("-std=c++11 -march=native -mtune=native -Ofast")
-rosbuild_add_executable(aruco_tracker 
+add_executable(aruco_tracker 
 	src/common.cpp
 	src/common.h
 	src/traces.cpp
@@ -21,6 +19,8 @@ rosbuild_add_executable(aruco_tracker
 	src/imgdump.h
 	src/image_saver.cpp
 	src/image_saver.h
+	src/aruco_detector.cpp
+	src/aruco_detector.h
 	src/cv_helpers.cpp
 	src/cv_helpers.h
 	src/cv_parallel.h

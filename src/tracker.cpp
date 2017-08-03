@@ -3,9 +3,6 @@
 #include "parse_args.h"
 #include "common.h"
 #include "imgdump.h"
-#include <ros/ros.h>
-#include <std_msgs/String.h>
-#include <geometry_msgs/PoseStamped.h>
 #include "aruco_detector.h"
 
 using namespace std;
@@ -14,10 +11,6 @@ using namespace cv;
 
 static bool brun = false;
 static unique_ptr<ArucoDetector> p_detector;
-const string node_name = "marker_tracker";
-const string pub_name = "/basler/marker";
-unique_ptr<ros::NodeHandle> node;
-ros::Publisher pub;
 
 static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_timestamp)
 {
@@ -29,25 +22,10 @@ static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_ti
         if (p_detector)
         {
             Mat im(Ny, Nx, CV_8U, (void*)data);
-            map<int, marker_t> markers;
-            p_detector->detect(im, markers);
+            map<int, polygon_t> markers;
+            p_detector->find_markers(im, markers);
 
-            auto m_origin = markers.find(38);
-            auto m_obj = markers.find(39);
-
-            if (m_origin != markers.end() && m_obj != markers.end())
-            {
-                Matx44f T_origin = m_origin->second.T;
-                Matx44f T_obj = m_obj->second.T;
-                Matx44f T = T_origin.inv() * T_obj;
-
-                geometry_msgs::Pose pose;
-                pose.position.x = T(0,3);
-                pose.position.y = T(1,3);
-                pose.position.z = T(2,3);
-                pub.publish(pose);
-                dbg_msg("found: ", pose.position.x, " ", pose.position.y, " ", pose.position.z);
-            }
+            // TODO
         }
     }
     catch (exception& e)
@@ -94,24 +72,42 @@ int main(int argc, char* argv[])
         string configpath = p["config"];
         auto cfg = json_load(configpath);
 
+        traces_init(cfg);
+
         if (p.find("image") != p.end())
         {
             p_detector = get_aruco_detector(cfg);
             Mat im = cv::imread(p["image"], 0);
-            map<int, marker_t> markers;
-            p_detector->detect(im, markers);
+            if (im.empty())
+            {
+                err_msg("can't read ", p["image"]);
+                return -1;
+            }
+
+            map<int, polygon_t> markers;
+            p_detector->find_markers(im, markers);
+
+            for (auto const& m : markers)
+            {
+                Vec4f q;
+                Vec3f p;
+                int id = m.first;
+                dbg_msg("marker: ", id, " corners: ", m.second[0], " ", m.second[1], " ", m.second[2], " ", m.second[3], ";");
+                p_detector->get_marker_3d_coords(m.second, p, q);
+                dbg_msg("markrer ", id, " found: ", p, "; ", q, ";");
+
+                p_detector->draw_frame(im, p, q);
+            }
+
+//            p_detector->draw_found_markers(im, markers);
+            cv::imwrite("debug.png", im);
         }
         else
         {
-            ros::init(argc, argv, node_name);
-            node.reset(new ros::NodeHandle());
-            pub = node->advertise<geometry_msgs::Pose>(pub_name, 10);
-
             traces_init(cfg);
             imgdump_init(cfg);
             run_tracker(cfg);
         }
-
     }
     catch (invalid_argument& e)
     {
