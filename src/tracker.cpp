@@ -100,6 +100,8 @@ int main(int argc, char* argv[])
             }
 
 //            p_detector->draw_found_markers(im, markers);
+            cv::imshow("1", im);
+            cv::waitKey();
             cv::imwrite("debug.png", im);
         }
         else

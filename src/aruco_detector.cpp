@@ -3,74 +3,8 @@
 #include <tuple>
 #include <opencv2/opencv.hpp>
 #include "traces.h"
+#include "transforms.h"
 
-
-template <typename T>
-inline T sign(T const& a)
-{
-    return a > static_cast<T>(0) ? static_cast<T>(1) : static_cast<T>(-1);
-}
-
-inline cv::Matx33f get_closest_rotmat(cv::Matx33f const& M)
-{
-    cv::Matx33f u, vt;
-    cv::Vec3f w;
-    cv::SVDecomp(M, w, u, vt);
-    cv::Matx33f R = u * vt;
-    return R;
-}
-
-inline cv::Vec4f rotmat_to_quat(cv::Matx33f const& R)
-{
-    float t = cv::trace(R);
-    float r = sqrtf(1.f + t);
-    float s = 0.5f / r;
-    float w = 0.5f * r;
-    float x = (R(2,1) - R(1,2)) * s;
-    float y = (R(0,2) - R(2,0)) * s;
-    float z = (R(1,0) - R(0,1)) * s;
-    cv::Vec4f quat;
-    return cv::Vec4f(w,x,y,z);
-}
-
-template <int n>
-inline cv::Vec<float,n> get_col(cv::Matx<float,n,n> const& m, int c)
-{
-    cv::Vec<float,n> col;
-
-    for (int i = 0; i < n; ++ i)
-        col[i] = m(i, c);
-
-    return col;
-}
-
-inline cv::Matx33f quat_to_rotmat(cv::Vec4f const& q)
-{
-    float w = q[0];
-    float x = q[1];
-    float y = q[2];
-    float z = q[3];
-
-    cv::Matx33f R(
-        1 - 2*y*y - 2*z*z,     2*x*y - 2*z*w,       2*x*z + 2*y*w,
-            2*x*y + 2*z*w, 1 - 2*x*x - 2*z*x,       2*y*z - 2*x*w,
-            2*x*z - 2*y*w,     2*y*z + 2*x*w,   1 - 2*x*x - 2*y*y
-    );
-
-    return R;
-}
-
-inline std::tuple<cv::Vec3f, cv::Vec4f> decompose_homogeneous_mat(cv::Matx44f const& T)
-{
-    cv::Vec3f d(T(0, 3), T(1, 3), T(2, 3));
-    cv::Matx33f R(
-        T(0,0), T(0,1), T(0,2),
-        T(1,0), T(1,1), T(1,2),
-        T(2,0), T(2,1), T(2,2)
-    );
-    cv::Vec4f q = rotmat_to_quat(R);
-    return std::make_tuple(d, q);
-}
 
 template <int Ny, int Nx>
 cv::Matx<double, Ny, Nx> json_get_matx(jsonxx::Object const& cfg, std::string const& name)
@@ -130,34 +64,48 @@ void ArucoDetector::get_marker_3d_coords(polygon_t const& polygon, cv::Vec3f& di
 {
     assert(polygon.size() == 4);
 
-    std::vector<cv::Point2f> polygon_normed;
+    if (true)
+    {
+        std::vector<cv::Vec3d> rvec_arr(1);
+        std::vector<cv::Vec3d> tvec_arr(1);
+        std::vector<polygon_t> polygon_arr = {polygon};
 
-    cv::undistortPoints(polygon, polygon_normed, m_intrinsics.K, m_intrinsics.distortion);
-    cv::Matx33f H = cv::findHomography(m_aligned_pattern, polygon_normed);
+        cv::aruco::estimatePoseSingleMarkers(polygon_arr, m_pattern_side, m_intrinsics.K, m_intrinsics.distortion, rvec_arr, tvec_arr);
 
-    auto c1 = H.col(0);
-    auto c2 = H.col(1);
+        displacement = tvec_arr[0];
+        quaternion = rodrigues_to_quat(rvec_arr[0]);
+    }
+    else
+    {
+        std::vector<cv::Point2f> polygon_normed;
 
-    float c1_norm = sqrtf(c1.dot(c1));
-    float c2_norm = sqrtf(c2.dot(c2));
-    float k = -2.f / (c1_norm + c2_norm);
+        cv::undistortPoints(polygon, polygon_normed, m_intrinsics.K, m_intrinsics.distortion);
+        cv::Matx33f H = cv::findHomography(m_aligned_pattern, polygon_normed);
 
-    cv::Matx33f P = H * k * sign(cv::determinant(H));
-    cv::Point3f eu = cv::Point3f(P(0,0), P(1,0), P(2,0));
-    cv::Point3f ev = cv::Point3f(P(0,1), P(1,1), P(2,1));
-    cv::Point3f ew = eu.cross(ev);
-    cv::Matx33f R = cv::Matx33f(
-        eu.x, ev.x, ew.x,
-        eu.y, ev.y, ew.y,
-        eu.z, ev.z, ew.z
-    );
-    R = get_closest_rotmat(R);
+        auto c1 = H.col(0);
+        auto c2 = H.col(1);
 
-    quaternion = rotmat_to_quat(R);
+        float c1_norm = sqrtf(c1.dot(c1));
+        float c2_norm = sqrtf(c2.dot(c2));
+        float k = -2.f / (c1_norm + c2_norm);
 
-    displacement[0] = P(0,2);
-    displacement[1] = P(1,2);
-    displacement[2] = P(2,2);
+        cv::Matx33f P = H * k * sign(cv::determinant(H));
+        cv::Point3f eu = cv::Point3f(P(0,0), P(1,0), P(2,0));
+        cv::Point3f ev = cv::Point3f(P(0,1), P(1,1), P(2,1));
+        cv::Point3f ew = eu.cross(ev);
+        cv::Matx33f R = cv::Matx33f(
+            eu.x, ev.x, ew.x,
+            eu.y, ev.y, ew.y,
+            eu.z, ev.z, ew.z
+        );
+        R = get_closest_rotmat(R);
+
+        quaternion = rotmat_to_quat(R);
+
+        displacement[0] = P(0,2);
+        displacement[1] = P(1,2);
+        displacement[2] = P(2,2);
+    }
 }
 
 void ArucoDetector::find_markers(cv::Mat const& im, std::map<int, polygon_t>& markers)
@@ -198,21 +146,30 @@ void ArucoDetector::draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> c
 
 void ArucoDetector::draw_frame(cv::Mat& plot, cv::Vec3f const& p, cv::Vec4f q)
 {
-    cv::Matx33f R = quat_to_rotmat(q);
-    cv::Vec3f eu = get_col(R, 0);
-    cv::Vec3f ev = get_col(R, 1);
-    cv::Vec3f ew = get_col(R, 2);
+    if (true)
+    {
+        cv::Vec3d tvec = p;
+        cv::Vec3d rvec = quat_to_rodrigues(q);
+        cv::aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
+    }
+    else
+    {
+        cv::Matx33f R = quat_to_rotmat(q);
+        cv::Vec3f eu = get_col(R, 0);
+        cv::Vec3f ev = get_col(R, 1);
+        cv::Vec3f ew = get_col(R, 2);
 
-    std::vector<cv::Vec3f> scene_pts = {
-        p, p + eu * 0.08f, p + ev * 0.08f, p + ew * 0.08f
-    };
-    std::vector<cv::Vec2f> im_pts(4);
+        std::vector<cv::Vec3f> scene_pts = {
+            p, p + eu * 0.08f, p + ev * 0.08f, p + ew * 0.08f
+        };
+        std::vector<cv::Vec2f> im_pts(4);
 
-    cv::Vec3f rvec(0,0,0);
-    cv::Vec3f tvec(0,0,0);
-    cv::projectPoints(scene_pts, rvec, tvec, m_intrinsics.K, m_intrinsics.distortion, im_pts);
+        cv::Vec3f rvec(0,0,0);
+        cv::Vec3f tvec(0,0,0);
+        cv::projectPoints(scene_pts, rvec, tvec, m_intrinsics.K, m_intrinsics.distortion, im_pts);
 
-    cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[1]), cv::Scalar(255, 0, 0), 1);
-    cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[2]), cv::Scalar(255, 0, 0), 1);
-    cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[3]), cv::Scalar(255, 0, 0), 1);
+        cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[1]), cv::Scalar(255, 0, 0), 1);
+        cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[2]), cv::Scalar(255, 0, 0), 1);
+        cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[3]), cv::Scalar(255, 0, 0), 1);
+    }
 }
