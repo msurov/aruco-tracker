@@ -8,25 +8,26 @@ find_package(Threads REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -mtune=native -Ofast")
 
-add_executable(aruco_tracker 
-	src/common.cpp
-	src/common.h
-	src/traces.cpp
-	src/traces.h
-	src/jsonxx.cpp
-	src/jsonxx.h
-	src/imgdump.cpp
-	src/imgdump.h
-	src/image_saver.cpp
-	src/image_saver.h
-	src/aruco_detector.cpp
-	src/aruco_detector.h
-	src/cv_helpers.cpp
-	src/cv_helpers.h
-	src/cv_parallel.h
-	src/tracker.cpp
-	src/camera_basler1300_200uc.cpp
-	src/camera.h
+add_executable(aruco_tracker
+    src/common.cpp
+    src/common.h
+    src/traces.cpp
+    src/traces.h
+    src/jsonxx.cpp
+    src/jsonxx.h
+    src/imgdump.cpp
+    src/imgdump.h
+    src/image_saver.cpp
+    src/image_saver.h
+    src/aruco_detector.cpp
+    src/aruco_detector.h
+    src/cv_helpers.cpp
+    src/cv_helpers.h
+    src/cv_parallel.h
+    src/tracker.cpp
+    src/camera_basler1300_200uc.cpp
+    src/camera.h
+    src/transforms.h
 )
 
 target_link_libraries(aruco_tracker ${OpenCV_LIBS})
