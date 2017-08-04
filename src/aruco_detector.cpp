@@ -108,7 +108,7 @@ void ArucoDetector::get_marker_3d_coords(polygon_t const& polygon, cv::Vec3f& di
     }
 }
 
-void ArucoDetector::find_markers(cv::Mat const& im, std::map<int, polygon_t>& markers)
+void ArucoDetector::find_markers(cv::Mat const& im, std::map<int, polygon_t>& markers) const
 {
     std::vector<int> ids;
     std::vector<polygon_t> polygons;
@@ -131,7 +131,7 @@ void ArucoDetector::find_markers(cv::Mat const& im, std::map<int, polygon_t>& ma
     }
 }
 
-void ArucoDetector::draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> const& markers)
+void ArucoDetector::draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> const& markers) const
 {
     for (auto const& it : markers)
     {
@@ -144,7 +144,7 @@ void ArucoDetector::draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> c
     }
 }
 
-void ArucoDetector::draw_frame(cv::Mat& plot, cv::Vec3f const& p, cv::Vec4f q)
+void ArucoDetector::draw_frame(cv::Mat& plot, cv::Vec3f const& p, cv::Vec4f q) const
 {
     if (true)
     {
