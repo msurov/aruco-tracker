@@ -6,132 +6,135 @@
 #include "transforms.h"
 
 
-template <int Ny, int Nx>
-cv::Matx<double, Ny, Nx> json_get_matx(jsonxx::Object const& cfg, std::string const& name)
+using namespace std;
+using namespace cv;
+
+
+unique_ptr<ArucoDetector> get_aruco_detector(jsonxx::Object const& cfg)
 {
-    auto json_A = json_get_vector<double>(cfg, name);
-    cv::Matx33d A;
-
-    if (json_A.size() != Nx * Ny)
-        throw std::runtime_error("expected array " + name + " len is " + std::to_string(Nx * Ny));
-
-    for (int y = 0; y < Ny; ++y)
-    {
-        for (int x = 0; x < Nx; ++x)
-        {
-            A(y, x) = json_A[x + Nx * y];
-        }
-    }
-
-    return A;
-}
-
-std::unique_ptr<ArucoDetector> get_aruco_detector(jsonxx::Object const& cfg)
-{
-    auto cam = json_get<jsonxx::Object>(cfg, "intrinsics");
-    auto K = json_get_matx<3, 3>(cam, "K");
-    auto distortion = json_get_vector<float>(cam, "distortion");
-
     auto marker = json_get<jsonxx::Object>(cfg, "marker");
-    int nrows = json_get<jsonxx::Number>(marker, "nrows");
+    string dict_type = json_get<jsonxx::String>(marker, "dict_type");
     float side = json_get<jsonxx::Number>(marker, "side");
 
-    cam_intrinsics_t intrinsics = {K, distortion};
-    return std::unique_ptr<ArucoDetector>(new ArucoDetector(nrows, side, intrinsics));
+    return unique_ptr<ArucoDetector>(new ArucoDetector(dict_type, side));
 }
 
-
-ArucoDetector::ArucoDetector(int nrows, float side, cam_intrinsics_t const& intrinsics)
+inline Ptr<aruco::Dictionary> get_dict(string const& name)
 {
-    int v =
-        nrows == 4 ? cv::aruco::DICT_4X4_250 :
-        nrows == 5 ? cv::aruco::DICT_5X5_250 :
-        nrows == 6 ? cv::aruco::DICT_6X6_250 : -1;
+    map<string, aruco::PREDEFINED_DICTIONARY_NAME> dicts = {
+        {"4x4x50", aruco::DICT_4X4_50},
+        {"4x4x100", aruco::DICT_4X4_100},
+        {"4x4x250", aruco::DICT_4X4_250},
+        {"4x4x1000", aruco::DICT_4X4_1000},
+        {"5x5x50", aruco::DICT_5X5_50},
+        {"5x5x100", aruco::DICT_5X5_100},
+        {"5x5x250", aruco::DICT_5X5_250},
+        {"5x5x1000", aruco::DICT_5X5_1000},
+        {"6x6x50", aruco::DICT_6X6_50},
+        {"6x6x100", aruco::DICT_6X6_100},
+        {"6x6x250", aruco::DICT_6X6_250},
+        {"6x6x1000", aruco::DICT_6X6_1000},
+        {"7x7x50", aruco::DICT_7X7_50},
+        {"7x7x100", aruco::DICT_7X7_100},
+        {"7x7x250", aruco::DICT_7X7_250},
+        {"7x7x1000", aruco::DICT_7X7_1000},
+        {"orig", aruco::DICT_ARUCO_ORIGINAL},
+    };
+    auto p = dicts.find(name);
+    if (p == dicts.end())
+        throw runtime_error("invalid aruco dict name: " + string(name));
 
-    if (v == -1)
-        throw std::runtime_error("unknown argument");
+    return aruco::getPredefinedDictionary(p->second);
+}
 
-    m_dict = cv::aruco::getPredefinedDictionary(v);
+ArucoDetector::ArucoDetector(string const& dict_name, float side /* meters */, CameraIntrinsics intrinsics)
+{
+    m_dict = get_dict(dict_name);
     m_pattern_side = side;
     m_intrinsics = intrinsics;
-    m_aligned_pattern.push_back(cv::Point2f(0, side));
-    m_aligned_pattern.push_back(cv::Point2f(side, side));
-    m_aligned_pattern.push_back(cv::Point2f(side, 0));
-    m_aligned_pattern.push_back(cv::Point2f(0, 0));
+
+    vector<Vec3f> obj_points = {
+        Vec3f(0, side, 0),
+        Vec3f(side, side, 0),
+        Vec3f(side, 0, 0),
+        Vec3f(0, 0, 0),
+    };
+    m_obj_points = obj_points;
 }
 
-void ArucoDetector::get_marker_3d_coords(polygon_t const& polygon, cv::Vec3f& displacement, cv::Vec4f& quaternion) const
+void polygon_scale(polygon_t& polygon, float scale)
 {
-    assert(polygon.size() == 4);
-
-    if (true)
-    {
-        std::vector<cv::Vec3d> rvec_arr(1);
-        std::vector<cv::Vec3d> tvec_arr(1);
-        std::vector<polygon_t> polygon_arr = {polygon};
-
-        cv::aruco::estimatePoseSingleMarkers(polygon_arr, m_pattern_side, m_intrinsics.K, m_intrinsics.distortion, rvec_arr, tvec_arr);
-
-        displacement = tvec_arr[0];
-        quaternion = rodrigues_to_quat(rvec_arr[0]);
-    }
-    else
-    {
-        std::vector<cv::Point2f> polygon_normed;
-
-        cv::undistortPoints(polygon, polygon_normed, m_intrinsics.K, m_intrinsics.distortion);
-        cv::Matx33f H = cv::findHomography(m_aligned_pattern, polygon_normed);
-
-        auto c1 = H.col(0);
-        auto c2 = H.col(1);
-
-        float c1_norm = sqrtf(c1.dot(c1));
-        float c2_norm = sqrtf(c2.dot(c2));
-        float k = -2.f / (c1_norm + c2_norm);
-
-        cv::Matx33f P = H * k * sign(cv::determinant(H));
-        cv::Point3f eu = cv::Point3f(P(0,0), P(1,0), P(2,0));
-        cv::Point3f ev = cv::Point3f(P(0,1), P(1,1), P(2,1));
-        cv::Point3f ew = eu.cross(ev);
-        cv::Matx33f R = cv::Matx33f(
-            eu.x, ev.x, ew.x,
-            eu.y, ev.y, ew.y,
-            eu.z, ev.z, ew.z
-        );
-        R = get_closest_rotmat(R);
-
-        quaternion = rotmat_to_quat(R);
-
-        displacement[0] = P(0,2);
-        displacement[1] = P(1,2);
-        displacement[2] = P(2,2);
-    }
+    for (auto& pt : polygon)
+        pt *= scale;
 }
 
-void ArucoDetector::find_markers(cv::Mat const& im, std::map<int, polygon_t>& markers) const
+void ArucoDetector::set_intrinsics(CameraIntrinsics intrinsics)
 {
-    std::vector<int> ids;
-    std::vector<polygon_t> polygons;
-    cv::Mat blurred;
-    cv::GaussianBlur(im, blurred, cv::Size(15,15), 1.);
-    cv::Ptr<cv::aruco::DetectorParameters> parameters = cv::aruco::DetectorParameters::create();
-    parameters->doCornerRefinement = true;
-    parameters->cornerRefinementWinSize = 7;
-    parameters->cornerRefinementMaxIterations = 30;
-    parameters->cornerRefinementMinAccuracy = 0.1;
-    cv::aruco::detectMarkers(blurred, m_dict, polygons, ids, parameters);
+    m_intrinsics = intrinsics;
+}
 
-    // TODO cornersubpix
+inline float pt2f_len(Point2f const& p)
+{
+    return sqrtf(p.dot(p));
+}
 
-    for (int i = 0; i < (int)ids.size(); ++ i)
+inline float quad_min_diag(polygon_t const& p)
+{
+    float d1 = pt2f_len(p[0] - p[2]);
+    float d2 = pt2f_len(p[1] - p[3]);
+    return std::min(d1, d2);
+}
+
+void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) const
+{
+    vector<int> ids;
+    vector<polygon_t> polygons;
+    Mat blurred;
+    pyrDown(im, blurred);
+
+    // find corners
+    Ptr<aruco::DetectorParameters> parameters = aruco::DetectorParameters::create();
+    parameters->doCornerRefinement = false;
+    aruco::detectMarkers(blurred, m_dict, polygons, ids, parameters);
+
+    // refine corners
+    TermCriteria term_criteria(TermCriteria::MAX_ITER + TermCriteria::EPS, 50, 0.01);
+
+    for (int i = 0; i < ids.size(); ++i)
     {
+        auto& polygon = polygons[i];
         int id = ids[i];
-        polygon_t& polygon = polygons[i];
+
+        polygon_scale(polygon, 2.f);
+        float diag = quad_min_diag(polygon);
+
+        if (diag < 30.f)
+            continue;
+
+        int sz = lroundf(diag / 12.f);
+        sz = clamp(sz, 2, 20);
+        cornerSubPix(im, polygon, Size(sz, sz), Size(-1, -1), term_criteria);
+
         markers[id] = polygon;
     }
 }
 
-void ArucoDetector::draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> const& markers) const
+bool ArucoDetector::get_marker_pose(polygon_t const& polygon, Vec3f& displacement, Vec4f& quaternion) const
+{
+    assert(polygon.size() == 4);
+    Vec3d rvec;
+    Vec3d tvec;
+
+    bool b = solvePnP(m_obj_points, polygon, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, false, SOLVEPNP_ITERATIVE);
+    if (!b)
+        return false;
+
+    quaternion = rodrigues_to_quat(rvec);
+    displacement = tvec;
+    return true;
+}
+
+void ArucoDetector::draw_found_markers(Mat& plot, map<int, polygon_t> const& markers) const
 {
     for (auto const& it : markers)
     {
@@ -139,37 +142,14 @@ void ArucoDetector::draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> c
         for (int i = 0; i < 4; ++ i)
         {
             int j = (i + 1) % 4;
-            cv::line(plot, cv::Point2i(p[i]), cv::Point2i(p[j]), cv::Scalar(255, 0, 0), 1);
+            line(plot, Point2i(p[i]), Point2i(p[j]), Scalar(255, 0, 0), 1);
         }
     }
 }
 
-void ArucoDetector::draw_frame(cv::Mat& plot, cv::Vec3f const& p, cv::Vec4f q) const
+void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
 {
-    if (true)
-    {
-        cv::Vec3d tvec = p;
-        cv::Vec3d rvec = quat_to_rodrigues(q);
-        cv::aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
-    }
-    else
-    {
-        cv::Matx33f R = quat_to_rotmat(q);
-        cv::Vec3f eu = get_col(R, 0);
-        cv::Vec3f ev = get_col(R, 1);
-        cv::Vec3f ew = get_col(R, 2);
-
-        std::vector<cv::Vec3f> scene_pts = {
-            p, p + eu * 0.08f, p + ev * 0.08f, p + ew * 0.08f
-        };
-        std::vector<cv::Vec2f> im_pts(4);
-
-        cv::Vec3f rvec(0,0,0);
-        cv::Vec3f tvec(0,0,0);
-        cv::projectPoints(scene_pts, rvec, tvec, m_intrinsics.K, m_intrinsics.distortion, im_pts);
-
-        cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[1]), cv::Scalar(255, 0, 0), 1);
-        cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[2]), cv::Scalar(255, 0, 0), 1);
-        cv::line(plot, cv::Point2i(im_pts[0]), cv::Point2i(im_pts[3]), cv::Scalar(255, 0, 0), 1);
-    }
+    Vec3d tvec = p;
+    Vec3d rvec = quat_to_rodrigues(q);
+    aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
 }

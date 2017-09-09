@@ -26,6 +26,12 @@
     //     "calibration_tolerance": 0.066023
     // }
 
+    "camera_fake": {
+        "sources": "",
+        "format": "gray",
+        "fps": 10
+    },
+
     // zed left
     "intrinsics": {
         "K": [

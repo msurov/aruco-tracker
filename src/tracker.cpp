@@ -12,6 +12,7 @@ using namespace cv;
 static bool brun = false;
 static unique_ptr<ArucoDetector> p_detector;
 
+
 static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_timestamp)
 {
     if (!brun)
@@ -23,17 +24,26 @@ static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_ti
         {
             Mat im(Ny, Nx, CV_8U, (void*)data);
             map<int, polygon_t> markers;
-            p_detector->find_markers(im, markers);
+            p_detector->locate_markers(im, markers);
 
-            // TODO
+            for (auto const& m : markers)
+            {
+                int id = m.first;
+                cv::Vec4f q;
+                cv::Vec3f p;
+                p_detector->get_marker_pose(m.second, p, q);
+                dbg_msg("p: ", p, ", q: ", q, ";\n");
+            }
         }
     }
     catch (exception& e)
     {
+        brun = false;
         err_msg(e.what());
     }
     catch (...)
     {
+        brun = false;
         err_msg("caught unknown exception");
     }
 }
@@ -71,45 +81,9 @@ int main(int argc, char* argv[])
         auto p = args.parse(argc, argv);
         string configpath = p["config"];
         auto cfg = json_load(configpath);
-
         traces_init(cfg);
-
-        if (p.find("image") != p.end())
-        {
-            p_detector = get_aruco_detector(cfg);
-            Mat im = cv::imread(p["image"], 0);
-            if (im.empty())
-            {
-                err_msg("can't read ", p["image"]);
-                return -1;
-            }
-
-            map<int, polygon_t> markers;
-            p_detector->find_markers(im, markers);
-
-            for (auto const& m : markers)
-            {
-                Vec4f q;
-                Vec3f p;
-                int id = m.first;
-                dbg_msg("marker: ", id, " corners: ", m.second[0], " ", m.second[1], " ", m.second[2], " ", m.second[3], ";");
-                p_detector->get_marker_3d_coords(m.second, p, q);
-                dbg_msg("markrer ", id, " found: ", p, "; ", q, ";");
-
-                p_detector->draw_frame(im, p, q);
-            }
-
-//            p_detector->draw_found_markers(im, markers);
-            cv::imshow("1", im);
-            cv::waitKey();
-            cv::imwrite("debug.png", im);
-        }
-        else
-        {
-            traces_init(cfg);
-            imgdump_init(cfg);
-            run_tracker(cfg);
-        }
+        imgdump_init(cfg);
+        run_tracker(cfg);
     }
     catch (invalid_argument& e)
     {

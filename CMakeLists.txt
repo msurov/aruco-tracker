@@ -25,7 +25,8 @@ add_executable(aruco_tracker
     src/cv_helpers.h
     src/cv_parallel.h
     src/tracker.cpp
-    src/camera_basler1300_200uc.cpp
+    # src/camera_basler1300_200uc.cpp
+    src/camera_fake.cpp
     src/camera.h
     src/transforms.h
 )

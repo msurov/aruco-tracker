@@ -15,11 +15,12 @@ enum ImageFormat {
     FormatGrayscaled
 };
 
-class camera
+
+class Camera
 {
 public:
-    camera() {}
-    virtual ~camera() {}
+    Camera() {}
+    virtual ~Camera() {}
     virtual void set_handler(image_handler_t const& handler) = 0;
     virtual void run() = 0;
     virtual void stop() = 0;
@@ -28,4 +29,4 @@ public:
 };
 
 void init_camera(jsonxx::Object const& jsoncfg);
-camera* get_camera();
+Camera* get_camera();
