@@ -130,7 +130,7 @@ LineSeg refine_lineseg(Mat const& im, LineSeg const& seg, int wnd)
 {
     Point2f const& a = seg.a;
     Point2f const& b = seg.b;
-    int n = int((dist(a, b) + 0.5f) / 10);
+    int n = int((dist(a, b) + 0.5f));
 
     if (n < 2)
         return seg;
@@ -144,7 +144,7 @@ LineSeg refine_lineseg(Mat const& im, LineSeg const& seg, int wnd)
         Point2f c = a + (b - a) * i * (1.f / (n - 1));
         LineSeg tr(c - wnd * perp, c + wnd * perp);
 
-        cout << c << ": ";
+        cout << "[";
 
         for (int j = 0; j < u.size(); ++ j)
         {
@@ -152,7 +152,7 @@ LineSeg refine_lineseg(Mat const& im, LineSeg const& seg, int wnd)
             cout << u[j] << ", ";
         }
 
-        cout << std::endl;
+        cout << "]," << std::endl;
     }
 }
 
@@ -163,7 +163,7 @@ void refine_quad(Mat const& im, polygon_t& quad)
     for (int i = 0; i < n; ++ i)
     {
         LineSeg seg(quad.at(i), quad.at((i + 1) % n));
-        seg = refine_lineseg(im, seg, 15);
+        seg = refine_lineseg(im, seg, 12);
     }
 
 }
@@ -239,7 +239,7 @@ void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
 
 int main(int argc, char const* argv[])
 {
-    Mat im = imread("/home/msurov/dev/datasets/aruco/Image__2017-09-10__16-35-33.bmp", IMREAD_GRAYSCALE);
+    Mat im = imread("/home/maksim/dev/datasets/aruco6/10.png", IMREAD_GRAYSCALE);
 
     Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_5X5_250);
     Ptr<aruco::DetectorParameters> parameters = aruco::DetectorParameters::create();
