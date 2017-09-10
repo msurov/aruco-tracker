@@ -85,6 +85,89 @@ inline float quad_min_diag(polygon_t const& p)
     return std::min(d1, d2);
 }
 
+struct LineSeg {
+    Point2f a, b;
+    LineSeg(Point2f const& a, Point2f const& b) : a(a), b(b) {}
+    inline Point2f at(float t) const { return a + t * (b - a); }
+};
+
+inline float dist(Point2f const& a, Point2f const& b)
+{
+    Point2f d = b - a;
+    return sqrtf(d.dot(d));
+}
+
+inline float im_at(Mat const& im, float x, float y)
+{
+    assert(im.type() == CV_8U);
+    assert(x >= 0.f && x <= float(im.cols - 1));
+    assert(y >= 0.f && y <= float(im.rows - 1));
+
+    int x0 = int(x);
+    int y0 = int(y);
+    float dx = x - x0;
+    float dy = y - y0;
+
+    uchar u00 = im.at<uchar>(y0, x0);
+    uchar u10 = im.at<uchar>(y0 + 1, x0);
+    uchar u01 = im.at<uchar>(y0, x0 + 1);
+    uchar u11 = im.at<uchar>(y0 + 1, x0 + 1);
+
+    float a = u00;
+    float b = u01 - a;
+    float c = u10 - a;
+    float d = u00 + u11 - u01 - u10;
+
+    return a + b * dx + c * dy + d * dx * dy;
+}
+
+inline float im_at(Mat const& im, Point2f const& p)
+{
+    return im_at(im, p.x, p.y);
+}
+
+LineSeg refine_lineseg(Mat const& im, LineSeg const& seg, int wnd)
+{
+    Point2f const& a = seg.a;
+    Point2f const& b = seg.b;
+    int n = int((dist(a, b) + 0.5f) / 10);
+
+    if (n < 2)
+        return seg;
+
+    Matx22f S(0, -1, 1, 0);
+    Point2f perp = S * (b - a) * (1.f / dist(a, b));
+    vector<float> u(wnd * 2 + 1);
+
+    for (int i = 0; i < n; ++ i)
+    {
+        Point2f c = a + (b - a) * i * (1.f / (n - 1));
+        LineSeg tr(c - wnd * perp, c + wnd * perp);
+
+        cout << c << ": ";
+
+        for (int j = 0; j < u.size(); ++ j)
+        {
+            u[j] = im_at(im, tr.at(1.f * j / (u.size() - 1)));
+            cout << u[j] << ", ";
+        }
+
+        cout << std::endl;
+    }
+}
+
+void refine_quad(Mat const& im, polygon_t& quad)
+{
+    int const n = quad.size();
+
+    for (int i = 0; i < n; ++ i)
+    {
+        LineSeg seg(quad.at(i), quad.at((i + 1) % n));
+        seg = refine_lineseg(im, seg, 15);
+    }
+
+}
+
 void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) const
 {
     vector<int> ids;
@@ -152,4 +235,22 @@ void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
     Vec3d tvec = p;
     Vec3d rvec = quat_to_rodrigues(q);
     aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
+}
+
+int main(int argc, char const* argv[])
+{
+    Mat im = imread("/home/msurov/dev/datasets/aruco/Image__2017-09-10__16-35-33.bmp", IMREAD_GRAYSCALE);
+
+    Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_5X5_250);
+    Ptr<aruco::DetectorParameters> parameters = aruco::DetectorParameters::create();
+    parameters->doCornerRefinement = false;
+
+    vector<polygon_t> polygons;
+    vector<int> ids;
+
+    aruco::detectMarkers(im, dict, polygons, ids, parameters);
+    polygon_t& quad = polygons[0];
+    refine_quad(im, quad);
+
+    return 0;
 }
