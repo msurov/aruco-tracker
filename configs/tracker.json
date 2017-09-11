@@ -9,7 +9,7 @@
     },
 
     "marker": {
-        "nrows": 5,
+        "dict_type": "5x5x1000",
         "side": 80.0e-3
     },
 
@@ -27,7 +27,7 @@
     // }
 
     "camera_fake": {
-        "sources": "",
+        "sources": "/home/msurov/dev/datasets/aruco6/*.png",
         "format": "gray",
         "fps": 10
     },

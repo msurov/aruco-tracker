@@ -27,7 +27,7 @@ private:
     std::vector<cv::Vec3f> m_obj_points;
 
 public:
-    ArucoDetector(std::string const& dict_name, float side, CameraIntrinsics intrinsics=CameraIntrinsics());
+    ArucoDetector(std::string const& dict_name, float side, CameraIntrinsics intrinsics);
     void set_intrinsics(CameraIntrinsics intrinsics);
     bool get_marker_pose(polygon_t const& polygon, cv::Vec3f& displacement, cv::Vec4f& quaternion) const;
     void locate_markers(cv::Mat const& im, std::map<int, polygon_t>& markers) const;

@@ -10,13 +10,38 @@ using namespace std;
 using namespace cv;
 
 
+template <int Ny, int Nx>
+cv::Matx<double, Ny, Nx> json_get_matx(jsonxx::Object const& cfg, std::string const& name)
+{
+    auto json_A = json_get_vector<double>(cfg, name);
+    cv::Matx33d A;
+
+    if (json_A.size() != Nx * Ny)
+        throw std::runtime_error("expected array " + name + " len is " + std::to_string(Nx * Ny));
+
+    for (int y = 0; y < Ny; ++y)
+    {
+        for (int x = 0; x < Nx; ++x)
+        {
+            A(y, x) = json_A[x + Nx * y];
+        }
+    }
+
+    return A;
+}
+
 unique_ptr<ArucoDetector> get_aruco_detector(jsonxx::Object const& cfg)
 {
-    auto marker = json_get<jsonxx::Object>(cfg, "marker");
+    auto const& marker = json_get<jsonxx::Object>(cfg, "marker");
     string dict_type = json_get<jsonxx::String>(marker, "dict_type");
     float side = json_get<jsonxx::Number>(marker, "side");
 
-    return unique_ptr<ArucoDetector>(new ArucoDetector(dict_type, side));
+    auto const& json_intr = json_get<jsonxx::Object>(cfg, "intrinsics");
+    CameraIntrinsics intr;
+    intr.K = json_get_matx<3,3>(json_intr, "K");
+    intr.distortion = json_get_vector<float>(json_intr, "distortion");
+
+    return unique_ptr<ArucoDetector>(new ArucoDetector(dict_type, side, intr));
 }
 
 inline Ptr<aruco::Dictionary> get_dict(string const& name)
@@ -126,82 +151,6 @@ inline float im_at(Mat const& im, Point2f const& p)
     return im_at(im, p.x, p.y);
 }
 
-LineSeg refine_lineseg(Mat const& im, LineSeg const& seg, int wnd)
-{
-    Point2f const& a = seg.a;
-    Point2f const& b = seg.b;
-    int n = int((dist(a, b) + 0.5f));
-
-    if (n < 2)
-        return seg;
-
-    Matx22f S(0, -1, 1, 0);
-    Point2f perp = S * (b - a) * (1.f / dist(a, b));
-    vector<float> u(wnd * 2 + 1);
-
-    for (int i = 0; i < n; ++ i)
-    {
-        Point2f c = a + (b - a) * i * (1.f / (n - 1));
-        LineSeg tr(c - wnd * perp, c + wnd * perp);
-
-        cout << "[";
-
-        for (int j = 0; j < u.size(); ++ j)
-        {
-            u[j] = im_at(im, tr.at(1.f * j / (u.size() - 1)));
-            cout << u[j] << ", ";
-        }
-
-        cout << "]," << std::endl;
-    }
-}
-
-void refine_quad(Mat const& im, polygon_t& quad)
-{
-    int const n = quad.size();
-
-    for (int i = 0; i < n; ++ i)
-    {
-        LineSeg seg(quad.at(i), quad.at((i + 1) % n));
-        seg = refine_lineseg(im, seg, 12);
-    }
-
-}
-
-void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) const
-{
-    vector<int> ids;
-    vector<polygon_t> polygons;
-    Mat blurred;
-    pyrDown(im, blurred);
-
-    // find corners
-    Ptr<aruco::DetectorParameters> parameters = aruco::DetectorParameters::create();
-    parameters->doCornerRefinement = false;
-    aruco::detectMarkers(blurred, m_dict, polygons, ids, parameters);
-
-    // refine corners
-    TermCriteria term_criteria(TermCriteria::MAX_ITER + TermCriteria::EPS, 50, 0.01);
-
-    for (int i = 0; i < ids.size(); ++i)
-    {
-        auto& polygon = polygons[i];
-        int id = ids[i];
-
-        polygon_scale(polygon, 2.f);
-        float diag = quad_min_diag(polygon);
-
-        if (diag < 30.f)
-            continue;
-
-        int sz = lroundf(diag / 12.f);
-        sz = clamp(sz, 2, 20);
-        cornerSubPix(im, polygon, Size(sz, sz), Size(-1, -1), term_criteria);
-
-        markers[id] = polygon;
-    }
-}
-
 bool ArucoDetector::get_marker_pose(polygon_t const& polygon, Vec3f& displacement, Vec4f& quaternion) const
 {
     assert(polygon.size() == 4);
@@ -237,20 +186,161 @@ void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
     aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
 }
 
-int main(int argc, char const* argv[])
+Matx13f fit_line(Mat const& W)
 {
-    Mat im = imread("/home/maksim/dev/datasets/aruco6/10.png", IMREAD_GRAYSCALE);
+    int const Ny = W.rows;
+    int const Nx = W.cols;
 
-    Ptr<aruco::Dictionary> dict = aruco::getPredefinedDictionary(aruco::DICT_5X5_250);
+    Mat A(Nx * Ny, 2, CV_32F);
+    Mat B(Nx * Ny, 1, CV_32F);
+    int neqs = 0;
+
+    for (int y = 0; y < Ny; ++ y)
+    {
+        uchar const* pw = W.ptr<uchar>(y);
+
+        for (int x = 0; x < Nx; ++ x)
+        {
+            float w = pw[x] / 256.f;
+            if (w > 0.05)
+            {
+                A.at<float>(neqs, 0) = x * w;
+                A.at<float>(neqs, 1) = w;
+                B.at<float>(neqs) = y * w;
+                ++ neqs;
+            }
+        }
+    }
+
+    A.resize(neqs);
+    B.resize(neqs);
+
+    Matx21f ab;
+    cv::solve(A, B, ab, DECOMP_SVD);
+
+    return Matx13f(ab(0,0), -1.f, ab(1,0));
+}
+
+inline Point2f normalized(Point2f const& v)
+{
+    float n2 = v.dot(v);
+
+    if (n2 < 1e-12)
+        return Point2f(0,0);
+    return v / sqrtf(v.dot(v));
+}
+
+RotatedRect get_neib_rect(Point2f const& p1, Point2f const& p2, float sz)
+{
+    Point2f center = (p1 + p2) * 0.5f;
+    Point2f v = p2 - p1;
+    Size2f rect_sz(sqrtf(v.dot(v)), sz);
+    float alpha = atan2(v.y, v.x);
+    return RotatedRect(center, rect_sz, alpha);
+}
+
+Matx13f refine_edge_line(Mat const& im, Point2f const& p1, Point2f const& p2, float neighborhood_sz, bool dbg)
+{
+    auto const& r = get_neib_rect(p1, p2, neighborhood_sz);
+    float c = cosf(-r.angle + M_PI);
+    float s = sinf(-r.angle + M_PI);
+
+    Matx33f S1(
+        1, 0, -r.center.x,
+        0, 1, -r.center.y,
+        0, 0, 1
+    );
+    Matx33f R(
+        c, -s, 0,
+        s, c, 0,
+        0, 0, 1
+    );
+    Matx33f S2(
+        1, 0, r.size.width / 2.f,
+        0, 1, r.size.height / 2.f,
+        0, 0, 1
+    );
+    Matx33f T = S2 * R * S1;
+    Matx23f _T(
+        T(0,0), T(0,1), T(0,2),
+        T(1,0), T(1,1), T(1,2)
+    );
+
+    Mat cropped;
+    cv::warpAffine(im, cropped, _T, r.size, INTER_LINEAR);
+    cv::Sobel(cropped, cropped, CV_8U, 0, 1, 3, 0.25, 0, BORDER_DEFAULT);
+    Matx13f f = fit_line(cropped);
+    Matx13f l = f * T;
+    if (dbg)
+    {
+//        cv::imshow("1", cropped);
+//        cv::waitKey();
+    }
+    return l;
+}
+
+inline Point2f lines_crossong_pt(Matx13f const& l1, Matx13f const& l2)
+{
+    Matx22f A(
+        l1(0), l1(1),
+        l2(0), l2(1)
+    );
+    Matx21f B(
+        -l1(2),
+        -l2(2)
+    );
+    Matx21f c = A.inv() * B;
+    return Point2f(c(0), c(1));
+}
+
+void refine_quad(Mat const& im, polygon_t& quad, bool dbg)
+{
+    assert(quad.size() == 4);
+
+    Matx13f edges[4];
+
+    float diag = quad_min_diag(quad);
+    float neighborhood_sz = clamp(diag / 5.f, 6.f, 30.f);
+
+    for (int i = 0; i < 4; ++ i)
+    {
+        Point2f const& p1 = quad[i];
+        Point2f const& p2 = quad[(i + 1) % 4];
+        edges[i] = refine_edge_line(im, p1, p2, neighborhood_sz, dbg);
+    }
+
+    for (int i = 0; i < 4; ++ i)
+    {
+        quad[i] = lines_crossong_pt(edges[i], edges[(i + 1) % 4]);
+    }
+}
+
+void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) const
+{
+    vector<int> ids;
+    vector<polygon_t> polygons;
+    Mat blurred;
+    pyrDown(im, blurred);
+
+    // find corners
     Ptr<aruco::DetectorParameters> parameters = aruco::DetectorParameters::create();
     parameters->doCornerRefinement = false;
+    aruco::detectMarkers(blurred, m_dict, polygons, ids, parameters);
 
-    vector<polygon_t> polygons;
-    vector<int> ids;
+    // refine corners
+    TermCriteria term_criteria(TermCriteria::MAX_ITER + TermCriteria::EPS, 50, 0.01);
 
-    aruco::detectMarkers(im, dict, polygons, ids, parameters);
-    polygon_t& quad = polygons[0];
-    refine_quad(im, quad);
+    for (int i = 0; i < ids.size(); ++i)
+    {
+        auto& polygon = polygons[i];
+        int id = ids[i];
 
-    return 0;
+        polygon_scale(polygon, 2.f);
+        float diag = quad_min_diag(polygon);
+        if (diag < 20.f)
+            continue;
+
+        refine_quad(im, polygon, id == 3);
+        markers[id] = polygon;
+    }
 }

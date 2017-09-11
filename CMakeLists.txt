@@ -8,6 +8,12 @@ find_package(Threads REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -mtune=native -Ofast")
 
+if (${CMAKE_BUILD_TYPE} EQUAL "Release")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
+endif()
+
 add_executable(aruco_tracker
     src/common.cpp
     src/common.h

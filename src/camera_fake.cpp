@@ -32,6 +32,24 @@ private:
         return stoll(digits);
     }
 
+    Mat read(std::string const& path)
+    {
+        std::string ext = std::get<1>(splitext(path));
+        if (sources_format == "bggr")
+        {
+            if (ext == ".raw" || ext == ".bggr")
+                return read_raw(path);
+            throw std::runtime_error("unsupported image format");
+        }
+        else if (sources_format == "gray")
+        {
+            if (ext == ".png" || ext == ".bmp")
+                return cv::imread(path, IMREAD_GRAYSCALE);
+            throw std::runtime_error("unsupported image format");
+        }
+        throw std::runtime_error("unsupported image format");
+    }
+
     void handler_loop()
     {
         auto t0 = chrono::high_resolution_clock::now();
@@ -42,7 +60,7 @@ private:
         {
             if (handler)
             {
-                Mat img = read_raw(files[i]);
+                Mat img = read(files[i]);
                 auto ts = get_timestamp(files[i]);
                 handler((uint8_t const*)img.data, img.cols, img.rows, ts);
             }
@@ -61,7 +79,7 @@ private:
 public:
     FakeCamera(string const& files_mask, string const& sources_format, float fps)
     {
-        if (sources_format != "bggr" && sources_format != "rggb")
+        if (sources_format != "bggr" && sources_format != "rggb" && sources_format != "gray")
             throw runtime_error("incorrect sources_format value");
 
         period_ms = int(1e+3f / fps);
@@ -114,10 +132,10 @@ static unique_ptr<FakeCamera> cam;
 
 void init_camera(jsonxx::Object const& jsoncfg)
 {
-    if (!jsoncfg.has<jsonxx::Object>("fake_camera"))
-        throw runtime_error("config file doesn't have 'fake_camera' entry");
+    if (!jsoncfg.has<jsonxx::Object>("camera_fake"))
+        throw runtime_error("config file doesn't have 'camera_fake' entry");
 
-    auto const& json_fake_cam = jsoncfg.get<jsonxx::Object>("fake_camera");
+    auto const& json_fake_cam = jsoncfg.get<jsonxx::Object>("camera_fake");
     auto const& json_sources = json_fake_cam.get<jsonxx::String>("sources");
     auto const& json_format = json_fake_cam.get<jsonxx::String>("format");
     float const fps = json_get(json_fake_cam, "fps", 1., 200.);

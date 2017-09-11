@@ -31,6 +31,7 @@ static void camera_handler(uint8_t const* data, int Nx, int Ny, int64_t frame_ti
                 int id = m.first;
                 cv::Vec4f q;
                 cv::Vec3f p;
+//                dbg_msg("corners: ", m.second.at(0), ", ", m.second.at(1), ", ", m.second.at(2), ", ", m.second.at(3), ";");
                 p_detector->get_marker_pose(m.second, p, q);
                 dbg_msg("p: ", p, ", q: ", q, ";\n");
             }
@@ -69,33 +70,33 @@ void run_tracker(jsonxx::Object const& cfg)
     get_camera()->stop();
 }
 
-//int main(int argc, char* argv[])
-//{
-//    make_arg_list args({
-//        { { "-c", "--config" }, "config", "path to tracker config file", "", true },
-//        { { "-i", "--image" }, "image", "path to an image to process", "", false }
-//    });
+int main(int argc, char* argv[])
+{
+    make_arg_list args({
+        { { "-c", "--config" }, "config", "path to tracker config file", "", true },
+        { { "-i", "--image" }, "image", "path to an image to process", "", false }
+    });
 
-//    try
-//    {
-//        auto p = args.parse(argc, argv);
-//        string configpath = p["config"];
-//        auto cfg = json_load(configpath);
-//        traces_init(cfg);
-//        imgdump_init(cfg);
-//        run_tracker(cfg);
-//    }
-//    catch (invalid_argument& e)
-//    {
-//        err_msg(e.what());
-//        cout << args.help_message() << endl;
-//        return -1;
-//    }
-//    catch (exception& e)
-//    {
-//        err_msg(e.what());
-//        return -1;
-//    }
+    try
+    {
+        auto p = args.parse(argc, argv);
+        string configpath = p["config"];
+        auto cfg = json_load(configpath);
+        traces_init(cfg);
+        imgdump_init(cfg);
+        run_tracker(cfg);
+    }
+    catch (invalid_argument& e)
+    {
+        err_msg(e.what());
+        cout << args.help_message() << endl;
+        return -1;
+    }
+    catch (exception& e)
+    {
+        err_msg(e.what());
+        return -1;
+    }
 
-//    return 0;
-//}
+    return 0;
+}
