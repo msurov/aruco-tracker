@@ -8,7 +8,7 @@ find_package(Threads REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native -mtune=native -Ofast")
 
-if (${CMAKE_BUILD_TYPE} EQUAL "Release")
+if (${CMAKE_BUILD_TYPE} MATCHES "Release")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ofast")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
@@ -37,6 +37,8 @@ add_executable(aruco_tracker
     src/transforms.h
 )
 
+include_directories("${PROJECT_SOURCE_DIR}/src")
+
 target_link_libraries(aruco_tracker ${OpenCV_LIBS})
 target_link_libraries(aruco_tracker ${CMAKE_THREAD_LIBS_INIT})
 
@@ -52,3 +54,28 @@ target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libpylonutility.so)
 target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libGenApi_gcc_v3_0_Basler_pylon_v5_0.so)
 target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libGCBase_gcc_v3_0_Basler_pylon_v5_0.so)
 add_definitions("${PYLON_CFLAGS}")
+
+
+add_executable(test_local_autocontrast
+    tests/test_local_autocontrast.cpp
+    src/common.cpp
+    src/common.h
+    src/traces.cpp
+    src/traces.h
+    src/jsonxx.cpp
+    src/jsonxx.h
+    src/imgdump.cpp
+    src/imgdump.h
+    src/image_saver.cpp
+    src/image_saver.h
+    src/aruco_detector.cpp
+    src/aruco_detector.h
+    src/cv_helpers.cpp
+    src/cv_helpers.h
+    src/cv_parallel.h
+    src/camera_fake.cpp
+    src/camera.h
+    src/transforms.h
+)
+target_link_libraries(test_local_autocontrast ${OpenCV_LIBS})
+target_link_libraries(test_local_autocontrast ${CMAKE_THREAD_LIBS_INIT})

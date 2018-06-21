@@ -79,10 +79,10 @@ ArucoDetector::ArucoDetector(string const& dict_name, float side /* meters */, C
     m_intrinsics = intrinsics;
 
     vector<Vec3f> obj_points = {
-        Vec3f(0, side, 0),
         Vec3f(side, side, 0),
         Vec3f(side, 0, 0),
         Vec3f(0, 0, 0),
+        Vec3f(0, side, 0),
     };
     m_obj_points = obj_points;
 }
@@ -183,7 +183,19 @@ void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
 {
     Vec3d tvec = p;
     Vec3d rvec = quat_to_rodrigues(q);
-    aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
+    // aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
+
+    std::vector<cv::Point3f> objpts = {
+        {0, 0, 0},
+        {m_pattern_side, 0, 0},
+        {0, m_pattern_side, 0},
+        {0, 0, m_pattern_side}
+    };
+    std::vector<cv::Point2f> impts(4);
+    cv::projectPoints(objpts, rvec, tvec, m_intrinsics.K, m_intrinsics.distortion, impts);
+    cv::line(plot, impts[0], impts[1], cv::Scalar(0));
+    cv::line(plot, impts[0], impts[2], cv::Scalar(0));
+    cv::line(plot, impts[0], impts[3], cv::Scalar(0));
 }
 
 Matx13f fit_line(Mat const& W)
