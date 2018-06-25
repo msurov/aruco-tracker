@@ -16,8 +16,8 @@ struct log_properties_t
     log_properties_t() : 
         enable_errs(true),
         enable_warns(true),
-        enable_info(false),
-        enable_dbgs(false)
+        enable_info(true),
+        enable_dbgs(true)
     {
     }
 };

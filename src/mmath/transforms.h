@@ -2,14 +2,9 @@
 
 #include <opencv2/opencv.hpp>
 #include <math.h>
+#include "stdalg.h"
 #include <tuple>
 
-
-template <typename T>
-inline T sign(T const& a)
-{
-    return a > static_cast<T>(0) ? static_cast<T>(1) : static_cast<T>(-1);
-}
 
 inline cv::Matx33f get_closest_rotmat(cv::Matx33f const& M)
 {

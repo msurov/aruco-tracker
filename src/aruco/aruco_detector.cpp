@@ -2,8 +2,9 @@
 
 #include <tuple>
 #include <opencv2/opencv.hpp>
-#include "traces.h"
-#include "transforms.h"
+#include <misc/traces.h>
+#include <misc/json.h>
+#include <mmath/transforms.h>
 
 
 using namespace std;
@@ -11,9 +12,9 @@ using namespace cv;
 
 
 template <int Ny, int Nx>
-cv::Matx<double, Ny, Nx> json_get_matx(jsonxx::Object const& cfg, std::string const& name)
+cv::Matx<double, Ny, Nx> json_get_matx(Json::Value const& cfg, std::string const& name)
 {
-    auto json_A = json_get_vector<double>(cfg, name);
+    auto json_A = json_get_vec<double>(cfg, name);
     cv::Matx33d A;
 
     if (json_A.size() != Nx * Ny)
@@ -30,16 +31,16 @@ cv::Matx<double, Ny, Nx> json_get_matx(jsonxx::Object const& cfg, std::string co
     return A;
 }
 
-unique_ptr<ArucoDetector> get_aruco_detector(jsonxx::Object const& cfg)
+unique_ptr<ArucoDetector> get_aruco_detector(Json::Value const& cfg)
 {
-    auto const& marker = json_get<jsonxx::Object>(cfg, "marker");
-    string dict_type = json_get<jsonxx::String>(marker, "dict_type");
-    float side = json_get<jsonxx::Number>(marker, "side");
+    auto const& marker = json_get<Json::Value>(cfg, "marker");
+    string dict_type = json_get<std::string>(marker, "dict_type");
+    double side = json_get<double>(marker, "side");
 
-    auto const& json_intr = json_get<jsonxx::Object>(cfg, "intrinsics");
+    auto const& json_intr = json_get<Json::Value>(cfg, "intrinsics");
     CameraIntrinsics intr;
     intr.K = json_get_matx<3,3>(json_intr, "K");
-    intr.distortion = json_get_vector<float>(json_intr, "distortion");
+    intr.distortion = json_get_vec<float>(json_intr, "distortion");
 
     return unique_ptr<ArucoDetector>(new ArucoDetector(dict_type, side, intr));
 }
@@ -283,11 +284,34 @@ Matx13f refine_edge_line(Mat const& im, Point2f const& p1, Point2f const& p2, fl
         T(1,0), T(1,1), T(1,2)
     );
 
-    Mat cropped;
-    cv::warpAffine(im, cropped, _T, r.size, INTER_LINEAR);
-    cv::Sobel(cropped, cropped, CV_8U, 0, 1, 3, 0.25, 0, BORDER_DEFAULT);
-    Matx13f f = fit_line(cropped);
+    Mat cropped, grad;
+    cv::GaussianBlur(im, cropped, cv::Size(5,5), 2.);
+    // cropped = im.clone();
+    cv::warpAffine(cropped, cropped, _T, r.size, INTER_LINEAR);
+    // cv::GaussianBlur(cropped, cropped, cv::Size(5,5), 2.);
+    cv::Sobel(cropped, grad, CV_8U, 0, 1, 3, 0.25, 0, BORDER_DEFAULT);
+    Matx13f f = fit_line(grad);
     Matx13f l = f * T;
+
+
+    if (dbg)
+    {
+        static int i = 0;
+        ++ i;
+        std::string name = "sobel-" + std::to_string(i);
+
+        cv::Mat plot;
+        float scale = 1.f;
+        cv::cvtColor(cropped, plot, cv::COLOR_GRAY2BGR);
+        cv::resize(plot, plot, cv::Size(), scale, scale, INTER_NEAREST);
+        Point2f p1(0, -f(0,2)/f(0,1));
+        Point2f p2(cropped.cols, (-f(0,2) - f(0,0)*cropped.cols)/f(0,1));
+        cv::line(plot, scale*p1, scale*p2, Scalar(0,255,0));
+
+        cv::namedWindow(name, cv::WINDOW_NORMAL);
+        cv::imshow(name, plot);
+    }
+
     return l;
 }
 
@@ -312,7 +336,7 @@ void refine_quad(Mat const& im, polygon_t& quad, bool dbg)
     Matx13f edges[4];
 
     float diag = quad_min_diag(quad);
-    float neighborhood_sz = clamp(diag / 5.f, 6.f, 30.f);
+    float neighborhood_sz = clip(diag / 5.f, 6.f, 30.f);
 
     for (int i = 0; i < 4; ++ i)
     {
@@ -354,8 +378,7 @@ void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) 
         if (diag < 15.f)
             continue;
 
-        // TODO:
-        refine_quad(im, polygon, false);
+        refine_quad(im, polygon, id==42);
         markers[id] = polygon;
     }
 }

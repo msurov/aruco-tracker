@@ -5,15 +5,17 @@
 #include <stdexcept>
 #include <opencv2/core.hpp>
 #include <opencv2/aruco.hpp>
-#include "jsonxx.h"
-#include "camera.h"
+#include <misc/json.h>
 
 
 typedef std::vector<cv::Point2f> polygon_t;
 
-struct CameraIntrinsics final {
+
+struct CameraIntrinsics
+{
     cv::Matx33f K;
     std::vector<float> distortion;
+    cv::Size2i resolution;
 };
 
 
@@ -36,4 +38,5 @@ public:
     void draw_marker(cv::Mat& plot, polygon_t const& marker) const;
 };
 
-std::unique_ptr<ArucoDetector> get_aruco_detector(jsonxx::Object const& cfg);
+std::unique_ptr<ArucoDetector> get_aruco_detector(Json::Value const& cfg);
+void refine_quad(cv::Mat const& im, polygon_t& quad, bool dbg);
