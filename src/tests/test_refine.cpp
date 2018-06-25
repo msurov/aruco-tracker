@@ -328,7 +328,7 @@ struct ObjPose
     cv::Vec3d rvec;
 };
 
-ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<cv::Point3f> const& marker)
+ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<cv::Point3f> const& marker, cv::Mat& projection)
 {
     std::vector<cv::Point3f> marker_interpolated = interpolate(marker, 50);
     std::vector<cv::Point2f> imgpts_interpolated(marker_interpolated.size());
@@ -338,12 +338,12 @@ ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<
     std::vector<cv::Point2f> imgpts(marker.size());
     cv::projectPoints(marker, pose.rvec, pose.tvec, intr.K, intr.distortion, imgpts);
 
-    cv::Mat im(intr.resolution, CV_8U);
-    im = 0;
-    draw_marker(im, imgpts_interpolated);
+    projection.create(intr.resolution, CV_8U);
+    projection = 0;
+    draw_marker(projection, imgpts_interpolated);
 
     std::vector<cv::Point2f> refined = imgpts;
-    refine_quad(im, refined, false);
+    refine_quad(projection, refined, false);
 
     ObjPose pose_found;
     cv::solvePnP(marker, refined, intr.K, intr.distortion, pose_found.rvec, pose_found.tvec, false, cv::SOLVEPNP_ITERATIVE);
@@ -368,16 +368,21 @@ void test_pnp_set()
         {   0, 8e-2, 0},
     };
 
-    const int N = 10;
+    const int N = 2;
     for (int i = 0; i < N; ++ i)
     {
         ObjPose pose;
-        pose.tvec = cv::Vec3d(-0.5, 0.3, 1. + 2. * i / N);
+        pose.tvec = cv::Vec3d(0.0, 0.0, 1. + 2. * i / N);
         pose.rvec = cv::Vec3d(0.9, -0.1, 0.8);
         ObjPose pose2;
-        pose2 = test_pnp(intr, pose, marker);
+        cv::Mat projection;
+        pose2 = test_pnp(intr, pose, marker, projection);
+        cv::namedWindow("proj-" + std::to_string(i), cv::WINDOW_NORMAL);
+        cv::imshow("proj-" + std::to_string(i), projection);
         dbg_msg("dif: ", (pose.tvec - pose2.tvec) * 1e+3);
     }
+
+    cv::waitKey();
 }
 
 void test_line_fitting()
