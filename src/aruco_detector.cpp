@@ -79,10 +79,10 @@ ArucoDetector::ArucoDetector(string const& dict_name, float side /* meters */, C
     m_intrinsics = intrinsics;
 
     vector<Vec3f> obj_points = {
+        Vec3f(0, side, 0),
         Vec3f(side, side, 0),
         Vec3f(side, 0, 0),
         Vec3f(0, 0, 0),
-        Vec3f(0, side, 0),
     };
     m_obj_points = obj_points;
 }
@@ -166,16 +166,22 @@ bool ArucoDetector::get_marker_pose(polygon_t const& polygon, Vec3f& displacemen
     return true;
 }
 
-void ArucoDetector::draw_found_markers(Mat& plot, map<int, polygon_t> const& markers) const
+void ArucoDetector::draw_marker(Mat& plot, polygon_t const& p) const
 {
-    for (auto const& it : markers)
+    for (int i = 0; i < 4; ++ i)
     {
-        polygon_t const& p = it.second;
-        for (int i = 0; i < 4; ++ i)
-        {
-            int j = (i + 1) % 4;
-            line(plot, Point2i(p[i]), Point2i(p[j]), Scalar(255, 0, 0), 1);
-        }
+        int j = (i + 1) % 4;
+        line(plot, Point2i(p[i]), Point2i(p[j]), Scalar(255, 0, 0), 1);
+    }
+
+    circle(plot, p[3], 5, Scalar(255, 0, 0), -1);
+}
+
+void ArucoDetector::draw_markers(Mat& plot, map<int, polygon_t> const& markers) const
+{
+    for (auto const& m : markers)
+    {
+        draw_marker(plot, m.second);
     }
 }
 
@@ -183,7 +189,6 @@ void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
 {
     Vec3d tvec = p;
     Vec3d rvec = quat_to_rodrigues(q);
-    // aruco::drawAxis(plot, m_intrinsics.K, m_intrinsics.distortion, rvec, tvec, m_pattern_side);
 
     std::vector<cv::Point3f> objpts = {
         {0, 0, 0},
@@ -193,9 +198,9 @@ void ArucoDetector::draw_frame(Mat& plot, Vec3f const& p, Vec4f q) const
     };
     std::vector<cv::Point2f> impts(4);
     cv::projectPoints(objpts, rvec, tvec, m_intrinsics.K, m_intrinsics.distortion, impts);
-    cv::line(plot, impts[0], impts[1], cv::Scalar(0));
-    cv::line(plot, impts[0], impts[2], cv::Scalar(0));
-    cv::line(plot, impts[0], impts[3], cv::Scalar(0));
+    cv::line(plot, impts[0], impts[1], cv::Scalar(255,0,0));
+    cv::line(plot, impts[0], impts[2], cv::Scalar(0,255,0));
+    cv::line(plot, impts[0], impts[3], cv::Scalar(0,0,255));
 }
 
 Matx13f fit_line(Mat const& W)
@@ -283,11 +288,6 @@ Matx13f refine_edge_line(Mat const& im, Point2f const& p1, Point2f const& p2, fl
     cv::Sobel(cropped, cropped, CV_8U, 0, 1, 3, 0.25, 0, BORDER_DEFAULT);
     Matx13f f = fit_line(cropped);
     Matx13f l = f * T;
-    if (dbg)
-    {
-//        cv::imshow("1", cropped);
-//        cv::waitKey();
-    }
     return l;
 }
 
@@ -323,7 +323,7 @@ void refine_quad(Mat const& im, polygon_t& quad, bool dbg)
 
     for (int i = 0; i < 4; ++ i)
     {
-        quad[i] = lines_crossong_pt(edges[i], edges[(i + 1) % 4]);
+        quad[i] = lines_crossong_pt(edges[(i -1 + 4) % 4], edges[i]);
     }
 }
 
@@ -333,6 +333,10 @@ void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) 
     vector<polygon_t> polygons;
     Mat blurred;
     pyrDown(im, blurred);
+    // pyrDown(blurred, blurred);
+    // blurred = im;
+
+    float scale = 1.f * im.rows / blurred.rows;
 
     // find corners
     Ptr<aruco::DetectorParameters> parameters = aruco::DetectorParameters::create();
@@ -340,19 +344,18 @@ void ArucoDetector::locate_markers(Mat const& im, map<int, polygon_t>& markers) 
     aruco::detectMarkers(blurred, m_dict, polygons, ids, parameters);
 
     // refine corners
-    TermCriteria term_criteria(TermCriteria::MAX_ITER + TermCriteria::EPS, 50, 0.01);
-
     for (int i = 0; i < ids.size(); ++i)
     {
         auto& polygon = polygons[i];
         int id = ids[i];
 
-        polygon_scale(polygon, 2.f);
+        polygon_scale(polygon, scale);
         float diag = quad_min_diag(polygon);
-        if (diag < 20.f)
+        if (diag < 15.f)
             continue;
 
-        refine_quad(im, polygon, id == 3);
+        // TODO:
+        refine_quad(im, polygon, false);
         markers[id] = polygon;
     }
 }

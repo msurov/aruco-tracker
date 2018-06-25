@@ -11,12 +11,14 @@ void local_autocontrast(cv::Mat const& in, cv::Mat& out, int sz, double alpha=1.
     cv::addWeighted(in, alpha, blurred, -alpha, 128, out, CV_8U);
 }
 
-void test_detector()
+void test_detector(std::string const& filepath)
 {
-    cv::Mat im0 = cv::imread("dataset/00061.png", 0);
+    cv::Mat im0 = cv::imread(filepath, 0);
     cv::Mat im;
-    local_autocontrast(im0, im, 128, 2.0);
-    cv::imwrite("dataset/00061_ac.png", im);
+    // local_autocontrast(im0, im, 128, 1.5);
+    cv::equalizeHist(im0, im);
+    im = (im0 + im) / 2;
+    // cv::imwrite("dataset/00061_ac.png", im);
 
     CameraIntrinsics intrinsics;
     intrinsics.K = cv::Matx33f(
@@ -34,46 +36,46 @@ void test_detector()
     detector.locate_markers(im, markers);
     std::cout << markers.size() << std::endl;
 
-    for (auto const& m : markers)
-    {
-        std::cout << m.first << " ";
-    }
-
-    std::cout << std::endl;
-
-    for (auto const& m : markers)
-    {
-        cv::Point2f p1 = m.second.at(0);
-        cv::Point2f p2 = m.second.at(1);
-        cv::Point2f p3 = m.second.at(2);
-        cv::Point2f p4 = m.second.at(3);
-
-        std::cout << "[" << p1 << ", " << p2 << ", " << p3 << ", " << p4 << "]," << std::endl;
-    }
+    cv::Mat plot;
+    cv::cvtColor(im, plot, cv::COLOR_GRAY2BGR);
 
     for (auto const& m : markers)
     {
         cv::Vec3f d;
         cv::Vec4f q;
+
         detector.get_marker_pose(m.second, d, q);
-        std::cout << m.first << ": " << d << " " << q << std::endl;
-        detector.draw_frame(im, d, q);
+        detector.draw_marker(plot, m.second);
+        detector.draw_frame(plot, d, q);
+    }
+
+    if (true)
+    {
+        cv::Vec3f d13, d48;
+        cv::Vec4f q13, q48;
+        detector.get_marker_pose(markers[13], d13, q13);
+        std::cout << 13 << ": " << d13 << " " << q13 << std::endl;
+
+        detector.get_marker_pose(markers[48], d48, q48);
+        std::cout << 48 << ": " << d48 << " " << q48 << std::endl;
+
+        cv::Vec3f d = d48-d13;
+        std::cout << "dist 13-48" << ": " << sqrtf(d.dot(d)) << std::endl;
     }
 
     // detector.draw_found_markers(im, markers);
-    cv::imshow("1", im);
+    cv::namedWindow("1", cv::WINDOW_NORMAL);
+    cv::imshow("1", plot);
     cv::waitKey();
-
-    // 15 16 43 46 48 49
 }
 
-void test_autocontrast()
+void test_autocontrast(std::string const& filepath)
 {
-    cv::Mat im = cv::imread("dataset/00061.png");
+    cv::Mat im = cv::imread(filepath);
     cv::Mat im1, im2;
 
     cv::cvtColor(im, im1, cv::COLOR_BGR2GRAY);
-    local_autocontrast(im1, im2, 300, 1.5);
+    local_autocontrast(im1, im2, 300, 2.0);
 
     cv::namedWindow("src", cv::WINDOW_NORMAL);
     cv::imshow("src", im1);
@@ -85,6 +87,6 @@ void test_autocontrast()
 int main()
 {
     // test_autocontrast();
-    test_detector();
+    test_detector("dataset/00000.png");
     return 0;
 }

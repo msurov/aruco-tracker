@@ -32,8 +32,8 @@ public:
     bool get_marker_pose(polygon_t const& polygon, cv::Vec3f& displacement, cv::Vec4f& quaternion) const;
     void locate_markers(cv::Mat const& im, std::map<int, polygon_t>& markers) const;
     void draw_frame(cv::Mat& plot, cv::Vec3f const& p, cv::Vec4f q) const;
-    void draw_found_markers(cv::Mat& plot, std::map<int, polygon_t> const& markers) const;
-    
+    void draw_markers(cv::Mat& plot, std::map<int, polygon_t> const& markers) const;
+    void draw_marker(cv::Mat& plot, polygon_t const& marker) const;
 };
 
 std::unique_ptr<ArucoDetector> get_aruco_detector(jsonxx::Object const& cfg);
