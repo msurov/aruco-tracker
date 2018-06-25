@@ -117,7 +117,7 @@ inline cv::Point2f lines_crossing_pt(cv::Vec3f const& l1, cv::Vec3f const& l2)
 }
 
 
-polygon_t enlarge_poly(polygon_t const& p, float d)
+polygon_t enlarge_poly_v3(polygon_t const& p, float d)
 {
     const int N = p.size();
     polygon_t enlarged;
@@ -159,6 +159,35 @@ polygon_t enlarge_poly_v2(polygon_t const& p, float d)
         cv::Vec3f const& e1 = edges[(i - 1 + N) % N];
         cv::Vec3f const& e2 = edges[i];
         enlarged.emplace_back(lines_crossing_pt(e1, e2));
+    }
+
+    return enlarged;
+}
+
+inline cv::Point2f normalized(cv::Point2f const& p)
+{
+    return p * (1.f / sqrtf(p.dot(p)) + 1e-8);
+}
+
+polygon_t enlarge_poly(polygon_t const& p, float d)
+{
+    const int N = p.size();
+    polygon_t enlarged;
+    enlarged.reserve(N);
+
+    for (int i = 0; i < N; ++ i)
+    {
+        cv::Point2f p1 = p[(i - 1 + N) % N];
+        cv::Point2f p2 = p[i];
+        cv::Point2f p3 = p[(i + 1) % N];
+
+        cv::Point2f v1 = normalized(p2 - p1);
+        cv::Point2f v2 = normalized(p3 - p2);
+
+        cv::Matx22f J(0, -1, 1, 0);
+        cv::Point2f vm = -J * normalized(v1 + v2) * 0.5f;
+        float l = sqrtf(2) * d / sqrtf(1 + v1.dot(v2));
+        enlarged.emplace_back(p2 + l * vm);
     }
 
     return enlarged;
@@ -295,7 +324,7 @@ void test_projection()
         {8e-2, 8e-2, 0},
         {   0, 8e-2, 0},
     };
-    std::vector<cv::Point3f> objpts2 = interpolate(objpts, 50);
+    std::vector<cv::Point3f> objpts2 = interpolate(objpts, 2);
     std::vector<cv::Point2f> imgpts(4);
     std::vector<cv::Point2f> imgpts2(objpts2.size());
 
@@ -344,13 +373,17 @@ ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<
 
     std::vector<cv::Point2f> refined = imgpts;
     refine_quad(projection, refined, false);
+    // TODO: think about this:
+    refined = enlarge_poly(refined, -0.5f);
+
+    // dbg_msg("source: ", imgpts, "\nrefined: ", refined);
 
     ObjPose pose_found;
     cv::solvePnP(marker, refined, intr.K, intr.distortion, pose_found.rvec, pose_found.tvec, false, cv::SOLVEPNP_ITERATIVE);
     return pose_found;
 }
 
-void test_pnp_set()
+void test_pnp_set_()
 {
     CameraIntrinsics intr;
     intr.K = cv::Matx33f(
@@ -385,8 +418,67 @@ void test_pnp_set()
     cv::waitKey();
 }
 
+void test_pnp_set()
+{
+    CameraIntrinsics intr;
+    intr.K = cv::Matx33f(
+        2000.0, 0, 1000.5,
+        0, 2000.0, 1000.5,
+        0, 0, 1.
+    );
+    intr.distortion = {0, 0, 0, 0, 0};
+    intr.resolution = {2000, 2000};
+
+    std::vector<cv::Point3f> marker = {
+        {    0,     0, 0},
+        {10e-2,     0, 0},
+        {10e-2, 10e-2, 0},
+        {    0, 10e-2, 0},
+    };
+
+    const int N = 17;
+    for (int i = 0; i < N; ++ i)
+    {
+        ObjPose pose;
+        pose.tvec = cv::Vec3d(0.0, 0.0, 1. + 3. * i / (N - 1));
+        pose.rvec = cv::Vec3d(0.0, 0.0, M_PI_4);
+        ObjPose pose2;
+        cv::Mat projection;
+        pose2 = test_pnp(intr, pose, marker, projection);
+        cv::namedWindow("proj-" + std::to_string(i), cv::WINDOW_NORMAL);
+        cv::imshow("proj-" + std::to_string(i), projection);
+        dbg_msg("dif: ", (pose.tvec - pose2.tvec) * 1e+3);
+    }
+
+    cv::waitKey();
+}
+
+void test_enlarge_poly()
+{
+    polygon_t p = {
+        {100, 100},
+        {250, 100},
+        {400, 400},
+        {200, 200},
+        {100, 300},
+    };
+    cv::Mat m(500,500,CV_8UC3);
+    m = 0;
+
+    auto const& q = enlarge_poly(p, 10);
+    std::vector<std::vector<cv::Point>> arr2 = {cvt_poly(q)};
+    cv::fillPoly(m, arr2, cv::Scalar(0, 255, 0));
+
+    std::vector<std::vector<cv::Point>> arr1 = {cvt_poly(p)};
+    cv::fillPoly(m, arr1, cv::Scalar(255, 0, 0));
+
+    cv::imshow("1", m);
+    cv::waitKey();
+}
+
 void test_line_fitting()
 {
+    // test_enlarge_poly();
     test_pnp_set();
     // test_projection();
     // test_rect();
