@@ -431,10 +431,10 @@ void test_pnp_set()
     intr.resolution = {1000, 1000};
 
     std::vector<cv::Point3f> marker = {
-        {    0,     0, 0},
-        {9.99e-2,     0, 0},
-        {9.99e-2, 9.99e-2, 0},
-        {    0, 9.99e-2, 0},
+        {       0,        0, 0},
+        {9.999e-2,        0, 0},
+        {9.999e-2, 9.999e-2, 0},
+        {       0, 9.999e-2, 0},
     };
 
     const int N = 17;
@@ -442,7 +442,7 @@ void test_pnp_set()
     {
         ObjPose pose;
         pose.tvec = cv::Vec3d(0.0, 0.0, 1. + 3. * i / (N - 1));
-        pose.rvec = cv::Vec3d(0.0, 0.0, 0);
+        pose.rvec = cv::Vec3d(0.0, 0.0, M_PI_4);
         ObjPose pose2;
         cv::Mat projection;
         pose2 = test_pnp(intr, pose, marker, projection);
