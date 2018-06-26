@@ -216,6 +216,7 @@ void draw_marker(cv::Mat& plot, polygon_t const& poly)
     
     cv::fillPoly(plot, arr2, cv::Scalar(255));
     cv::fillPoly(plot, arr1, cv::Scalar(0));
+    // cv::polylines(plot, arr1, true, cv::Scalar(128));
 }
 
 std::string format_arr(std::vector<cv::Point2f> const& a)
@@ -374,9 +375,9 @@ ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<
     std::vector<cv::Point2f> refined = imgpts;
     refine_quad(projection, refined, false);
     // TODO: think about this:
-    refined = enlarge_poly(refined, -0.5f);
-
-    // dbg_msg("source: ", imgpts, "\nrefined: ", refined);
+    // refined = enlarge_poly(refined, -0.5f);
+    // dbg_msg("source:  ", imgpts);
+    // dbg_msg("refined: ", refined);
 
     ObjPose pose_found;
     cv::solvePnP(marker, refined, intr.K, intr.distortion, pose_found.rvec, pose_found.tvec, false, cv::SOLVEPNP_ITERATIVE);
@@ -422,18 +423,18 @@ void test_pnp_set()
 {
     CameraIntrinsics intr;
     intr.K = cv::Matx33f(
-        2000.0, 0, 1000.5,
-        0, 2000.0, 1000.5,
+        1000.0, 0, 500.5,
+        0, 1000.0, 500.5,
         0, 0, 1.
     );
     intr.distortion = {0, 0, 0, 0, 0};
-    intr.resolution = {2000, 2000};
+    intr.resolution = {1000, 1000};
 
     std::vector<cv::Point3f> marker = {
         {    0,     0, 0},
-        {10e-2,     0, 0},
-        {10e-2, 10e-2, 0},
-        {    0, 10e-2, 0},
+        {9.99e-2,     0, 0},
+        {9.99e-2, 9.99e-2, 0},
+        {    0, 9.99e-2, 0},
     };
 
     const int N = 17;
@@ -441,7 +442,7 @@ void test_pnp_set()
     {
         ObjPose pose;
         pose.tvec = cv::Vec3d(0.0, 0.0, 1. + 3. * i / (N - 1));
-        pose.rvec = cv::Vec3d(0.0, 0.0, M_PI_4);
+        pose.rvec = cv::Vec3d(0.0, 0.0, 0);
         ObjPose pose2;
         cv::Mat projection;
         pose2 = test_pnp(intr, pose, marker, projection);
