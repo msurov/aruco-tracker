@@ -2,7 +2,32 @@
 #include <aruco/aruco_detector.h>
 #include <misc/json.h>
 #include <misc/files.h>
+#include <mmath/transforms.h>
 
+
+std::vector<cv::Point2f> poly_2f(std::vector<cv::Point> const& poly)
+{
+    std::vector<cv::Point2f> result(poly.size());
+
+    for (int i = 0; i < poly.size(); ++ i)
+        result[i] = poly.at(i);
+
+    return result;
+}
+
+inline std::vector<cv::Point> poly_2i(std::vector<cv::Point2f> const& poly)
+{
+    std::vector<cv::Point> result(poly.size());
+
+    for (int i = 0; i < poly.size(); ++ i)
+    {
+        float x = poly.at(i).x;
+        float y = poly.at(i).y;
+        result.at(i) = cv::Point(lroundf(x), lroundf(y));
+    }
+
+    return result;
+}
 
 void local_autocontrast(cv::Mat const& in, cv::Mat& out, int sz, double alpha=1.)
 {
@@ -116,54 +141,6 @@ inline cv::Point2f lines_crossing_pt(cv::Vec3f const& l1, cv::Vec3f const& l2)
     return cv::Point2f(p[0], p[1]);
 }
 
-
-polygon_t enlarge_poly_v3(polygon_t const& p, float d)
-{
-    const int N = p.size();
-    polygon_t enlarged;
-    enlarged.reserve(2*N);
-
-    for (int i = 0; i < N; ++ i)
-    {
-        cv::Point2f p1 = p[i];
-        cv::Point2f p2 = p[(i + 1) % N];
-        cv::Matx22f J(0, 1, -1, 0);
-        cv::Point2f s = d * J * normalized(p2 - p1);
-        enlarged.emplace_back(p1 + s);
-        enlarged.emplace_back(p2 + s);
-    }
-
-    return enlarged;
-}
-
-polygon_t enlarge_poly_v2(polygon_t const& p, float d)
-{
-    const int N = p.size();
-    std::vector<cv::Vec3f> edges;
-    edges.reserve(N);
-
-    for (int i = 0; i < N; ++ i)
-    {
-        cv::Point2f p1 = p[i];
-        cv::Point2f p2 = p[(i + 1) % N];
-        cv::Matx22f J(0, 1, -1, 0);
-        cv::Point2f s = d * J * normalized(p2 - p1);
-        edges.emplace_back(line_crossing_pts(p1 + s, p2 + s));
-    }
-
-    polygon_t enlarged;
-    enlarged.reserve(N);
-
-    for(int i = 0; i < N; ++ i)
-    {
-        cv::Vec3f const& e1 = edges[(i - 1 + N) % N];
-        cv::Vec3f const& e2 = edges[i];
-        enlarged.emplace_back(lines_crossing_pt(e1, e2));
-    }
-
-    return enlarged;
-}
-
 inline cv::Point2f normalized(cv::Point2f const& p)
 {
     return p * (1.f / sqrtf(p.dot(p)) + 1e-8);
@@ -193,30 +170,39 @@ polygon_t enlarge_poly(polygon_t const& p, float d)
     return enlarged;
 }
 
-inline std::vector<cv::Point> cvt_poly(std::vector<cv::Point2f> const& poly)
+void test_enlarge_poly()
 {
-    std::vector<cv::Point> result(poly.size());
+    polygon_t p = {
+        {100, 100},
+        {250, 100},
+        {400, 400},
+        {200, 200},
+        {100, 300},
+    };
+    cv::Mat m(500,500,CV_8UC3);
+    m = 0;
 
-    for (int i = 0; i < poly.size(); ++ i)
-    {
-        float x = poly.at(i).x;
-        float y = poly.at(i).y;
-        result.at(i) = cv::Point(lroundf(x), lroundf(y));
-    }
+    auto const& q = enlarge_poly(p, 10);
+    std::vector<std::vector<cv::Point>> arr2 = {poly_2i(q)};
+    cv::fillPoly(m, arr2, cv::Scalar(0, 255, 0));
 
-    return result;
+    std::vector<std::vector<cv::Point>> arr1 = {poly_2i(p)};
+    cv::fillPoly(m, arr1, cv::Scalar(255, 0, 0));
+
+    cv::imshow("1", m);
+    cv::waitKey();
 }
 
 void draw_marker(cv::Mat& plot, polygon_t const& poly)
 {
     int sz = 50;
     polygon_t enlarged = enlarge_poly(poly, sz);
-    std::vector<std::vector<cv::Point>> arr1 = {cvt_poly(poly)};
-    std::vector<std::vector<cv::Point>> arr2 = {cvt_poly(enlarged)};
+    std::vector<std::vector<cv::Point>> arr1 = {poly_2i(poly)};
+    std::vector<std::vector<cv::Point>> arr2 = {poly_2i(enlarged)};
     
     cv::fillPoly(plot, arr2, cv::Scalar(255));
     cv::fillPoly(plot, arr1, cv::Scalar(0));
-    // cv::polylines(plot, arr1, true, cv::Scalar(128));
+    cv::polylines(plot, arr1, true, cv::Scalar(128));
 }
 
 std::string format_arr(std::vector<cv::Point2f> const& a)
@@ -358,6 +344,25 @@ struct ObjPose
     cv::Vec3d rvec;
 };
 
+float pts_dist(cv::Point2f const& p1, cv::Point2f const& p2)
+{
+    cv::Point2f d = p2 - p1;
+    return sqrtf(d.dot(d));
+}
+
+std::vector<float> poly_sides(polygon_t const& p)
+{
+    const int N = p.size();
+    std::vector<float> sides(N);
+    for (int i = 0; i < N; ++ i)
+    {
+        auto const& p1 = p[i];
+        auto const& p2 = p[(i + 1) % N];
+        sides[i] = pts_dist(p1, p2);
+    }
+    return sides;
+}
+
 ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<cv::Point3f> const& marker, cv::Mat& projection)
 {
     std::vector<cv::Point3f> marker_interpolated = interpolate(marker, 50);
@@ -376,55 +381,20 @@ ObjPose test_pnp(CameraIntrinsics const& intr, ObjPose const& pose, std::vector<
     refine_quad(projection, refined, false);
     // TODO: think about this:
     // refined = enlarge_poly(refined, -0.5f);
-    // dbg_msg("source:  ", imgpts);
-    // dbg_msg("refined: ", refined);
+    // dbg_msg("source:  ", poly_sides(imgpts));
+    // dbg_msg("refined: ", poly_sides(refined));
 
     ObjPose pose_found;
     cv::solvePnP(marker, refined, intr.K, intr.distortion, pose_found.rvec, pose_found.tvec, false, cv::SOLVEPNP_ITERATIVE);
     return pose_found;
 }
 
-void test_pnp_set_()
-{
-    CameraIntrinsics intr;
-    intr.K = cv::Matx33f(
-        2287.735107421875, 0, 2029.416015625,
-        0, 2285.650146484375, 1081.11083984375,
-        0, 0, 1
-    );
-    intr.distortion = {-0.014937651343643665, -0.036428362131118774, 0.00019892562704626471, -4.5335535105550662e-05, 0.0054666893556714058};
-    intr.resolution = {4200, 2400};
-
-    std::vector<cv::Point3f> marker = {
-        {   0,    0, 0},
-        {8e-2,    0, 0},
-        {8e-2, 8e-2, 0},
-        {   0, 8e-2, 0},
-    };
-
-    const int N = 2;
-    for (int i = 0; i < N; ++ i)
-    {
-        ObjPose pose;
-        pose.tvec = cv::Vec3d(0.0, 0.0, 1. + 2. * i / N);
-        pose.rvec = cv::Vec3d(0.9, -0.1, 0.8);
-        ObjPose pose2;
-        cv::Mat projection;
-        pose2 = test_pnp(intr, pose, marker, projection);
-        cv::namedWindow("proj-" + std::to_string(i), cv::WINDOW_NORMAL);
-        cv::imshow("proj-" + std::to_string(i), projection);
-        dbg_msg("dif: ", (pose.tvec - pose2.tvec) * 1e+3);
-    }
-
-    cv::waitKey();
-}
-
 void test_pnp_set()
 {
     CameraIntrinsics intr;
     intr.K = cv::Matx33f(
-        1000.0, 0, 500.5,
-        0, 1000.0, 500.5,
+        3000.0, 0, 500.5,
+        0, 3000.0, 500.5,
         0, 0, 1.
     );
     intr.distortion = {0, 0, 0, 0, 0};
@@ -437,57 +407,136 @@ void test_pnp_set()
         {       0, 9.999e-2, 0},
     };
 
-    const int N = 17;
+    const int N = 2;
     for (int i = 0; i < N; ++ i)
     {
         ObjPose pose;
         pose.tvec = cv::Vec3d(0.0, 0.0, 1. + 3. * i / (N - 1));
-        pose.rvec = cv::Vec3d(0.0, 0.0, M_PI_4);
+        pose.rvec = cv::Vec3d(0.0, 0.0, M_PI_4/2);
         ObjPose pose2;
         cv::Mat projection;
         pose2 = test_pnp(intr, pose, marker, projection);
-        cv::namedWindow("proj-" + std::to_string(i), cv::WINDOW_NORMAL);
-        cv::imshow("proj-" + std::to_string(i), projection);
+        // cv::namedWindow("proj-" + std::to_string(i), cv::WINDOW_NORMAL);
+        // cv::imshow("proj-" + std::to_string(i), projection);
         dbg_msg("dif: ", (pose.tvec - pose2.tvec) * 1e+3);
     }
 
-    cv::waitKey();
+    // cv::waitKey();
 }
 
-void test_enlarge_poly()
+CameraIntrinsics load_intrinsics(Json::Value const& cfg)
 {
-    polygon_t p = {
-        {100, 100},
-        {250, 100},
-        {400, 400},
-        {200, 200},
-        {100, 300},
+    auto const& resolution = json_get_arr<double,2>(cfg, "resolution");
+    auto const& principal = json_get_arr<double,2>(cfg, "principal");
+    auto const& focus = json_get<double>(cfg, "focus");
+
+    CameraIntrinsics intr;
+    intr.resolution = cv::Size2i(resolution[0], resolution[1]);
+    intr.K = cv::Matx33f(
+        focus, 0, principal[0],
+        0, focus, principal[1],
+        0, 0, 1
+    );
+    intr.distortion = {0,0,0,0,0};
+    return intr;
+}
+
+void test_sample(std::string const& impath, std::string const& jsonpath)
+{
+    auto const& cfg = json_load(jsonpath);
+    auto const& intr = load_intrinsics(cfg);
+
+    cv::Mat binary;
+    cv::Mat im = cv::imread(impath, 0);
+    cv::threshold(im, binary, 128, 255, cv::THRESH_BINARY);
+
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(binary, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE);
+
+    
+    std::vector<std::vector<cv::Point>> filtered;
+    filtered.reserve(contours.size());
+
+    for (int i = 0; i < contours.size(); ++ i)
+    {
+        std::vector<cv::Point> c;
+        cv::approxPolyDP(contours[i], c, 3., true);
+        if (c.size() == 4)
+            filtered.push_back(c);
+    }
+
+    std::vector<std::vector<cv::Point2f>> refined(filtered.size());
+    for (int i = 0; i < filtered.size(); ++ i)
+    {
+        refined[i] = poly_2f(filtered[i]);
+        refine_quad(im, refined[i], false);
+    }
+
+    ObjPose pose_found;
+    std::vector<cv::Point3f> marker = {
+        {    0,     0, 0},
+        {    0, 10e-2, 0},
+        {10e-2, 10e-2, 0},
+        {10e-2,     0, 0},
     };
-    cv::Mat m(500,500,CV_8UC3);
-    m = 0;
 
-    auto const& q = enlarge_poly(p, 10);
-    std::vector<std::vector<cv::Point>> arr2 = {cvt_poly(q)};
-    cv::fillPoly(m, arr2, cv::Scalar(0, 255, 0));
+    cv::solvePnP(marker, refined[0], intr.K, intr.distortion, pose_found.rvec, pose_found.tvec, false, cv::SOLVEPNP_ITERATIVE);
+    dbg_msg("pose: ", pose_found.rvec, pose_found.tvec);
+    // return pose_found;
 
-    std::vector<std::vector<cv::Point>> arr1 = {cvt_poly(p)};
-    cv::fillPoly(m, arr1, cv::Scalar(255, 0, 0));
+    // cv::drawContours(im, filtered, -1, cv::Scalar(128));
+    for (int i = 0; i < filtered.size(); ++ i)
+        cv::circle(im, filtered[i][0], 10, cv::Scalar(255), -1);
 
-    cv::imshow("1", m);
+    cv::namedWindow("1", cv::WINDOW_NORMAL);
+    cv::imshow("1", im);
     cv::waitKey();
 }
 
 void test_line_fitting()
 {
     // test_enlarge_poly();
-    test_pnp_set();
+    // test_pnp_set();
     // test_projection();
     // test_rect();
     // test_rhombus();
+    test_sample("./dataset/vtk/1.png", "./dataset/vtk/1.json");
+}
+
+std::string format_rotation(cv::Vec4f const& q)
+{
+    float a;
+    cv::Vec3f l;
+    std::tie(a,l) = quat_to_angle_axis(q);
+    return format_args(a * 180 / M_PI, "° around ", l);
+}
+
+void test_aruco_detector(std::string const& filepath, std::string const& jsonpath)
+{
+    auto const& cfg = json_load(jsonpath);
+    auto const& intr = load_intrinsics(json_get(cfg, "camera"));
+    auto const& marker = json_get(cfg, "marker");
+    double side = json_get<double>(marker, "side");
+    auto type = json_get<std::string>(marker, "type");
+
+    cv::Mat im = cv::imread(filepath, 0);
+    ArucoDetector detector(type, side, intr);
+    std::map<int, polygon_t> markers;
+    detector.locate_markers(im, markers);
+
+    for (auto const& m : markers)
+    {
+        cv::Vec3f r;
+        cv::Vec4f q;
+        detector.get_marker_pose(m.second, r, q);
+        dbg_msg("markers found: id=", m.first, "; disp=", r, "; rot=", format_rotation(q));
+    }
+
 }
 
 int main()
 {
-    test_line_fitting();
+    test_aruco_detector("./dataset/vtk/1.png", "./dataset/vtk/1.json");
+    // test_line_fitting();
     return 0;
 }

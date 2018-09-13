@@ -81,7 +81,7 @@ inline T json_get(Json::Value const& cfg, std::string const& name, T const& defa
     return JsonType<T>::convert(value);
 }
 
-template <typename T>
+template <typename T=Json::Value>
 inline T json_get(Json::Value const& v, std::string const& name)
 {
     if (!v.isMember(name))
@@ -125,7 +125,7 @@ inline T json_get(Json::Value const& v, std::string const& name, T const& vmin, 
     return ans;
 }
 
-template <typename T>
+template <typename T=Json::Value>
 inline std::vector<T> json_get_vec(Json::Value const& v, std::string const& name)
 {
     if (!v.isMember(name))
