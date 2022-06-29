@@ -1,0 +1,32 @@
+{
+    "traces": {
+        "enable": ["all"]
+    },
+
+    "aruco": {
+        "markers_dict": "5x5x1000",
+        "marker_side": 40.0e-3,
+
+        "camera_intrinsics": {
+            "K": [
+                700, 0, 960,
+                0, 700, 540,
+                0, 0, 1
+            ],
+            "distortion": [0, 0, 0, 0, 0],
+            "calibration_tolerance": 0.119670,
+            "resolution": [1080, 1920]
+        }
+    },
+
+    "publish_file": {
+        "file": "stdout"
+    },
+
+    "fake_camera": {
+        "files_mask": "data/VID_20220629_092822-out/*.png",
+        "image_type": "gray",
+        "fps": 5
+    }
+
+}

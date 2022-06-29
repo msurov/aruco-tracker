@@ -1,0 +1,9 @@
+[submodule "3rd_party/cppmisc"]
+	path = 3rd_party/cppmisc
+	url = https://gitlab.com/msurov/cppmisc.git
+[submodule "3rd_party/cppmath"]
+	path = 3rd_party/cppmath
+	url = https://gitlab.com/msurov/cppmath.git
+[submodule "3rd_party/networking"]
+	path = 3rd_party/networking
+	url = https://gitlab.com/msurov/cppnetworking.git

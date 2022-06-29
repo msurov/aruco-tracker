@@ -1,143 +1,71 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.2)
 
-project(aruco_tracker)
+project(aruco_tracker CXX)
 
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
+find_package(jsoncpp REQUIRED)
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-SET(CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -mtune=native")
-SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
+if (MSVC)
+    add_compile_definitions(_USE_MATH_DEFINES)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ox")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W2")
+else()
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Ofast")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+endif()
 
-FIND_PACKAGE(jsoncpp REQUIRED)
-INCLUDE_DIRECTORIES("/usr/include/jsoncpp")
-SET(JSONCPP_LIBS jsoncpp)
+add_subdirectory(3rd_party/cppmisc)
+add_subdirectory(3rd_party/cppmath)
+add_subdirectory(3rd_party/networking)
 
-include_directories(${CMAKE_SOURCE_DIR}/src)
+option(WITH_BASLER_CAMERA "Basler camera support" OFF)
+option(WITH_FAKE_CAMERA "Fake camera (read photos from foler) support" ON)
 
-
-# 
-# Pylon
-# 
-execute_process(COMMAND /opt/pylon5/bin/pylon-config --cflags OUTPUT_VARIABLE PYLON_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND /opt/pylon5/bin/pylon-config --libs OUTPUT_VARIABLE PYLON_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(
-    COMMAND /opt/pylon5/bin/pylon-config --libdir
-    OUTPUT_VARIABLE PYLON_LIBDIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
+set(CAMERA_SRC
+    src/camera.h
+    src/camera.cpp
 )
-set(PYLON_LIBS 
-    ${PYLON_LIBDIR}/libpylonbase.so
-    ${PYLON_LIBDIR}/libpylonutility.so
-    ${PYLON_LIBDIR}/libGenApi_gcc_v3_0_Basler_pylon_v5_0.so
-    ${PYLON_LIBDIR}/libGCBase_gcc_v3_0_Basler_pylon_v5_0.so
+set(CAMERA_DEPS ${OpenCV_LIBS})
+
+if (WITH_FAKE_CAMERA)
+    set(CAMERA_SRC ${CAMERA_SRC} src/camera_fake.cpp)
+    add_definitions(-DBUILD_FAKE_CAMERA)
+endif()
+
+if (WITH_BASLER_CAMERA)
+    find_package(pylon REQUIRED)
+    add_definitions(BUILD_BASLER_CAMERA)
+    set(CAMERA_SRC ${CAMERA_SRC} src/camera_basler_usb.cpp)
+    set(CAMERA_DEPS ${CAMERA_DEPS} pylon)
+    add_definitions(-DBUILD_BASLER_CAMERA)
+endif()
+
+add_executable(recorder 
+    ${CAMERA_SRC}
+    src/recorder.cpp
 )
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libpylonbase.so)
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libpylonutility.so)
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libGenApi_gcc_v3_0_Basler_pylon_v5_0.so)
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libGCBase_gcc_v3_0_Basler_pylon_v5_0.so)
-add_definitions("${PYLON_CFLAGS}")
+target_link_libraries(recorder PUBLIC cppmisc ${CAMERA_DEPS})
 
-
-# 
-# misc
-# 
-ADD_LIBRARY(misc STATIC
-	src/misc/traces.h
-	src/misc/traces.cpp
-	src/misc/threads.h
-	src/misc/json.h
-	src/misc/filters.h
-	src/misc/splines.h
-	src/misc/signals.h
-	src/misc/signals.cpp
-	src/misc/time.h
-	src/misc/formatting.h
-	src/misc/files.h
+add_executable(aruco_tracker
+    src/aruco_detector.h
+    src/aruco_detector.cpp
+    src/edges_fitting.h
+    src/pnp_4pts.h
+    src/pnp_4pts.cpp
+    src/imgdump.cpp
+    src/imgdump.h
+    src/publisher.h
+    src/publisher.cpp
+    src/publisher_file.cpp
+    src/publisher_jsontcp.cpp
+    src/aruco_tracker.cpp
+    ${CAMERA_SRC}
 )
-TARGET_LINK_LIBRARIES(misc ${CMAKE_THREAD_LIBS_INIT} ${JSONCPP_LIBRARIES} ${JSONCPP_LIBS})
-
-
-# 
-# math
-# 
-# ADD_LIBRARY(mmath STATIC
-#     src/mmath/transforms.h
-#     src/mmath/stdalg.h
-# )
-# TARGET_LINK_LIBRARIES(mmath ${OpenCV_LIBS})
-
-
-# 
-# cameras
-# 
-ADD_LIBRARY(cameras STATIC
-    src/camera/camera.h
-    # src/camera/camera_basler1300_200uc.cpp
-    # src/camera/camera_fake.cpp
+target_link_libraries(aruco_tracker PUBLIC
+    cppmisc
+    cppmath
+    networking
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${CAMERA_DEPS}
 )
-target_link_libraries(cameras PYLON_LIBS)
-TARGET_LINK_LIBRARIES(cameras misc ${OpenCV_LIBS})
-
-
-# 
-# aruco
-# 
-ADD_LIBRARY(aruco STATIC
-    src/aruco/aruco_detector.h
-    src/aruco/aruco_detector.cpp
-)
-TARGET_LINK_LIBRARIES(aruco misc ${JSONCPP_LIBS})
-
-
-# 
-# tests
-# 
-add_executable(test_refine
-    src/tests/test_refine.cpp
-)
-target_link_libraries(test_refine misc aruco ${OpenCV_LIBS})
-
-
-# include_directories("${PROJECT_SOURCE_DIR}/src")
-
-# target_link_libraries(aruco_tracker ${OpenCV_LIBS})
-# target_link_libraries(aruco_tracker ${CMAKE_THREAD_LIBS_INIT})
-
-# execute_process(COMMAND /opt/pylon5/bin/pylon-config --cflags OUTPUT_VARIABLE PYLON_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-# execute_process(COMMAND /opt/pylon5/bin/pylon-config --libs OUTPUT_VARIABLE PYLON_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-# execute_process(
-#     COMMAND /opt/pylon5/bin/pylon-config --libdir
-#     OUTPUT_VARIABLE PYLON_LIBDIR
-#     OUTPUT_STRIP_TRAILING_WHITESPACE
-# )
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libpylonbase.so)
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libpylonutility.so)
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libGenApi_gcc_v3_0_Basler_pylon_v5_0.so)
-# target_link_libraries(aruco_tracker ${PYLON_LIBDIR}/libGCBase_gcc_v3_0_Basler_pylon_v5_0.so)
-# add_definitions("${PYLON_CFLAGS}")
-
-
-# add_executable(test_local_autocontrast
-#     tests/test_local_autocontrast.cpp
-#     src/common.cpp
-#     src/common.h
-#     src/traces.cpp
-#     src/traces.h
-#     src/jsonxx.cpp
-#     src/jsonxx.h
-#     src/imgdump.cpp
-#     src/imgdump.h
-#     src/image_saver.cpp
-#     src/image_saver.h
-#     src/aruco_detector.cpp
-#     src/aruco_detector.h
-#     src/cv_helpers.cpp
-#     src/cv_helpers.h
-#     src/cv_parallel.h
-#     src/camera_fake.cpp
-#     src/camera.h
-#     src/transforms.h
-# )
-# target_link_libraries(test_local_autocontrast ${OpenCV_LIBS})
-# target_link_libraries(test_local_autocontrast ${CMAKE_THREAD_LIBS_INIT})

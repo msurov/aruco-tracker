@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-colors = {
+__colors = {
     'black': (0,0,0),
     'white': (255,255,255),
     'green': (0, 255, 0),
@@ -15,9 +15,10 @@ colors = {
     'red': (255, 0, 0),
 }
 
+
 def get_color(c):
-    if c in colors:
-        r,g,b = colors[c]
+    if c in __colors:
+        r,g,b = __colors[c]
         return r * 256 * 256 + g * 256 + b
     elif type(c) == tuple:
         r,g,b = c
@@ -27,25 +28,43 @@ def get_color(c):
     raise Exception('Can\'t convert color')
 
 
-def svg_rect(x,y,w,h,c):
-    return '''<rect
-       style="fill:#%06x;fill-opacity:1;stroke:none;stroke-width:2;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       width="%fmm"
-       height="%fmm"
-       x="%fmm"
-       y="%fmm"/>
-    ''' % (get_color(c), w, h, x, y)
+def insert_indents(s):
+    return '    ' + s.replace('\n', '\n    ')
 
+
+__svg_rect_templ = \
+'''<rect
+    style="fill:#%06x;fill-opacity:1;stroke:none;stroke-width:2;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+    width="%fmm"
+    height="%fmm"
+    x="%fmm"
+    y="%fmm"
+/>
+'''
+
+def svg_rect(x,y,w,h,c):
+    return __svg_rect_templ % (get_color(c), w, h, x, y)
+
+
+__svg_text_templ = \
+'''<text
+    xml:space="preserve"
+    style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+    x="%fmm"
+    y="%fmm">
+    <tspan x="%fmm" y="%fmm" style="font-size:5mm">%s</tspan>
+</text>
+'''
 
 def svg_text(x, y, text):
-    templ = '''<text
-       xml:space="preserve"
-       style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="%fmm"
-       y="%fmm">
-       <tspan x="%fmm" y="%fmm" style="font-size:5mm">\n%s\n</tspan></text>\n'''
-    return templ % (x, y, x, y, text)
+    return __svg_text_templ % (x, y, x, y, text)
 
+
+__svg_mat_templ = \
+'''<g>
+%s
+</g>
+'''
 
 def svg_mat(m, sz, p0=[0,0]):
     Ny, Nx = np.shape(m)
@@ -57,31 +76,43 @@ def svg_mat(m, sz, p0=[0,0]):
         for x in range(Nx):
             c = 'black' if m[y,x] == 0 else 'white'
             rects += svg_rect(x * pxsz + p0[0], y * pxsz + p0[1], pxsz, pxsz, c)
+    
+    rects = insert_indents(rects)
+    return __svg_mat_templ % rects
 
-    return '''<g>\n%s\n</g>''' % rects
 
+__svg_dashed_rect_templ = \
+'''<rect
+    style="fill:none;stroke:#000000;stroke-width:0.99299997;stroke-miterlimit:4;stroke-dasharray:2,2;stroke-dashoffset:0"
+    x="%fmm"
+    y="%fmm"
+    width="%fmm"
+    height="%fmm"
+/>'''
 
 def svg_dashed_rect(x,y,w,h):
-    return '''<rect
-       style="fill:none;stroke:#000000;stroke-width:0.99299997;stroke-miterlimit:4;stroke-dasharray:2,2;stroke-dashoffset:0"
-       x="%fmm"
-       y="%fmm"
-       width="%fmm"
-       height="%fmm"
-       />''' % (x, y, w, h)
+    return __svg_dashed_rect_templ % (x, y, w, h)
 
 
+__svg_doc_templ = \
+'''<?xml version="1.0" encoding="UTF-8" standalone="no"?> 
+<svg width="110mm" height="140mm">
+<rect
+    style="fill:none;stroke:#000000"
+    id="rect114"
+    width="110mm"
+    height="140mm"
+    x="0"
+    y="0"
+/>
+%s
+</svg>
+'''
 
 def svg_doc(content):
-    template = '''<?xml version="1.0" encoding="UTF-8" standalone="no"?> 
-        <svg
-            width="110mm"
-            height="140mm"
-        >
-            %s
-        </svg>
-    '''
-    return template % (''.join(content))
+    text = ''.join(content)
+    text = insert_indents(text)
+    return __svg_doc_templ % text
 
 
 def get_dict_cfg(s):
@@ -135,13 +166,8 @@ def gen_set(dictcfg, N):
         f.close()
 
 
-'''def test_():
-    gen_set('5x5x250', 100)
-
-test_()'''
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Generate SVG Marker')
     parser.add_argument('--id', required=True, type=int, help='marker id')
     parser.add_argument('--dictcfg', required=True, type=str, help='aruco dictionary configuration HxWxN (for example 4x4x50, 5x5x100, etc)')
     parser.add_argument('--out', type=str, help='path to destination svg file')
