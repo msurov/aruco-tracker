@@ -61,23 +61,4 @@ public:
     void draw_frames(cv::Mat& plot, std::vector<MarkerPose> const& poses) const;
 };
 
-
-static void json_parse(Json::Value const& json, CameraIntrinsics& intr)
-{
-    std::array<float,9> k;
-    json_parse(json_get(json, "K"), k);
-    cv::Matx33f& K = intr.K;
-    for (int y = 0; y < 3; ++ y)
-    {
-        for (int x = 0; x < 3; ++ x)
-            K(y,x) = k[x + y * 3];
-    }
-
-    json_parse(json_get(json, "distortion"), intr.distortion);
-
-    std::array<int,2> resolution;
-    json_parse(json_get(json, "resolution"), resolution);
-    intr.resolution = cv::Size2i(resolution[0], resolution[1]);
-}
-
 ArucoDetectorPtr create_aruco_detector(Json::Value const& cfg);

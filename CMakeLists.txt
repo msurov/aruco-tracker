@@ -2,9 +2,12 @@ cmake_minimum_required(VERSION 3.2)
 
 project(aruco_tracker CXX)
 
+add_subdirectory(3rd_party/cppmisc)
+add_subdirectory(3rd_party/cppmath)
+add_subdirectory(3rd_party/networking)
+
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
-find_package(jsoncpp REQUIRED)
 
 if (MSVC)
     add_compile_definitions(_USE_MATH_DEFINES)
@@ -14,10 +17,6 @@ else()
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Ofast")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 endif()
-
-add_subdirectory(3rd_party/cppmisc)
-add_subdirectory(3rd_party/cppmath)
-add_subdirectory(3rd_party/networking)
 
 option(WITH_BASLER_CAMERA "Basler camera support" OFF)
 option(WITH_FAKE_CAMERA "Fake camera (read photos from foler) support" ON)

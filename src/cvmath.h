@@ -56,7 +56,7 @@ static void copy(
     }
 }
 
-template <typename T, int d, size_t nargs> 
+template <typename T, int d, int nargs> 
 inline cv::Matx<T, d * nargs, d * nargs> 
 compose_diag(const cv::Matx<T, d, d>(&blocks)[nargs])
 {
@@ -66,7 +66,7 @@ compose_diag(const cv::Matx<T, d, d>(&blocks)[nargs])
     return dst;
 }
 
-template <typename T, int n, int m, size_t nrows, size_t ncols> 
+template <typename T, int n, int m, int nrows, int ncols> 
 inline cv::Matx<T, n * nrows, m * ncols> 
 compose_block(const cv::Matx<T, n, m>(&blocks)[nrows][ncols])
 {

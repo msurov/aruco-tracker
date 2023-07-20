@@ -7,6 +7,7 @@
 #include "edges_fitting.h"
 #include "pnp_4pts.h"
 #include "cvmath.h"
+#include "json_cvmat.h"
 
 
 cv::Ptr<cv::aruco::Dictionary> ArucoDetector::get_dict(std::string const& name)
@@ -89,7 +90,7 @@ void ArucoDetector::find_markers(cv::Mat const& gray, std::vector<MarkerLoc>& ma
     markers.reserve(ids.size());
 
     // refine corners
-    for (int i = 0; i < ids.size(); ++i)
+    for (int i = 0; i < int(ids.size()); ++i)
     {
         Polygon const& polygon = polygons[i];
         int id = ids[i];
