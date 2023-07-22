@@ -17,7 +17,7 @@ public:
     ~TCPJsonPublisher();
     bool start() override;
     void term() override;
-    bool publish(int64_t t, std::vector<MarkerPose> const& marker_pose_arr) override;
+    bool publish(int64_t t, std::vector<Marker> const& markers) override;
     static PublisherPtr create(Json::Value const& config);
 };
 
@@ -27,17 +27,17 @@ R"({"id": "%d", "p": [%e, %e, %e], "r": [%e, %e, %e]})";
 
 static const int __markerpose_bufsz = sizeof(__markerpose_templ) + 4 + (3 + 3 + 21) * 16;
 
-inline int to_jsonstr(MarkerPose const& marker_pose, char* buf, int buf_sz)
+inline int to_jsonstr(Marker const& marker, char* buf, int buf_sz)
 {
-    int id = marker_pose.id;
+    const int id = marker.id;
 
-    double rx = marker_pose.pose.r(0);
-    double ry = marker_pose.pose.r(1);
-    double rz = marker_pose.pose.r(2);
+    const double rx = marker.world_marker_pose.r(0);
+    const double ry = marker.world_marker_pose.r(1);
+    const double rz = marker.world_marker_pose.r(2);
 
-    double px = marker_pose.pose.p(0);
-    double py = marker_pose.pose.p(1);
-    double pz = marker_pose.pose.p(2);
+    const double px = marker.world_marker_pose.p(0);
+    const double py = marker.world_marker_pose.p(1);
+    const double pz = marker.world_marker_pose.p(2);
 
     return snprintf(
         buf, buf_sz,
@@ -74,9 +74,9 @@ void TCPJsonPublisher::term()
     _server.stop();
 }
 
-bool to_jsonstr(int64_t ts, std::vector<MarkerPose> const& marker_pose_arr, std::string& s)
+bool to_jsonstr(int64_t ts, std::vector<Marker> const& markers, std::string& s)
 {
-    const int n = marker_pose_arr.size();
+    const int n = markers.size();
     s.clear();
     s.reserve(__markerpose_bufsz * n);
 
@@ -86,7 +86,7 @@ bool to_jsonstr(int64_t ts, std::vector<MarkerPose> const& marker_pose_arr, std:
     for (int i = 0; i < n; ++ i)
     {
         char buf[__markerpose_bufsz];
-        int len = to_jsonstr(marker_pose_arr[i], buf, sizeof(buf));
+        int len = to_jsonstr(markers[i], buf, sizeof(buf));
         if (len <= 0)
         {
             err_msg("internal error: failed to pack object pose into json");
@@ -100,10 +100,10 @@ bool to_jsonstr(int64_t ts, std::vector<MarkerPose> const& marker_pose_arr, std:
     return true;
 }
 
-bool TCPJsonPublisher::publish(int64_t ts, std::vector<MarkerPose> const& marker_pose_arr)
+bool TCPJsonPublisher::publish(int64_t ts, std::vector<Marker> const& markers)
 {
     std::string s;
-    bool ok = to_jsonstr(ts, marker_pose_arr, s);
+    bool ok = to_jsonstr(ts, markers, s);
     if (!ok)
     {
         _connection = nullptr;

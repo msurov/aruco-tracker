@@ -19,7 +19,7 @@ public:
     ~FilePublisher();
     bool start() override;
     void term() override;
-    bool publish(int64_t t, std::vector<MarkerPose> const& marker_pose_arr) override;
+    bool publish(int64_t t, std::vector<Marker> const& markers) override;
     static PublisherPtr create(Json::Value const& config);
 };
 
@@ -58,19 +58,19 @@ void FilePublisher::term()
     _out = nullptr;
 }
 
-bool FilePublisher::publish(int64_t ts, std::vector<MarkerPose> const& marker_pose_arr)
+bool FilePublisher::publish(int64_t ts, std::vector<Marker> const& markers)
 {
-    int nelems = marker_pose_arr.size();
+    const int nelems = markers.size();
     char const fmt[] = "id=%d; p=[%f,%f,%f]; r=[%f,%f,%f];\n";
     int bufsz = nelems * (sizeof(fmt) + 16 * 7) + 1;
     _buf.resize(bufsz);
     int used = 0;
     char* ptr = &_buf[0];
 
-    for (auto const& marker : marker_pose_arr)
+    for (auto const& marker : markers)
     {
-        auto const& p = marker.pose.p;
-        auto const& r = marker.pose.r;
+        auto const& p = marker.world_marker_pose.p;
+        auto const& r = marker.world_marker_pose.r;
         int n = snprintf(ptr, bufsz - used, fmt, marker.id, p(0), p(1), p(2), r(0), r(1), r(2));
         if (n <= 0)
             return false;

@@ -13,8 +13,7 @@
 struct RenderData
 {
     cv::Mat img;
-    std::vector<MarkerLoc> locations;
-    std::vector<MarkerPose> poses;
+    std::vector<Marker> markers;
 };
 
 class Render
@@ -33,14 +32,12 @@ public:
     bool update(ArucoDetector const& detector, RenderData const& rendata)
     {
         auto const& img = rendata.img;
-        auto const& locations = rendata.locations;
-        auto const& poses = rendata.poses;
         if (img.total() == 0)
             return true;
         cv::Mat plot;
         cv::cvtColor(img, plot, cv::COLOR_GRAY2BGR);
-        detector.draw_markers(plot, locations);
-        detector.draw_frames(plot, poses);
+        detector.draw_markers(plot, rendata.markers);
+        detector.draw_frames(plot, rendata.markers);
         cv::imshow("aruco tracker", plot);
         int val = cv::waitKey(25);
         if (val == 27)
@@ -71,12 +68,11 @@ private:
 
     void set_render_data(
         cv::Mat const& img,
-        std::vector<MarkerLoc> const& locations,
-        std::vector<MarkerPose> const& poses
+        std::vector<Marker> const& markers
         )
     {
         std::unique_lock<std::mutex> lock(_rendata_mtx);
-        _rendata = {img, locations, poses};
+        _rendata = {img, markers};
     }
 
     void parse_args(int argc, char const* argv[])
@@ -99,32 +95,21 @@ private:
         assert(!strcmp(raw.format, "gray"));
         cv::Mat img(raw.Ny, raw.Nx, CV_8U, (void*)raw.data);
 
-        std::vector<MarkerLoc> locations;
-        _aruco_detector->find_markers(img, locations);
-        if (locations.size() == 0)
+        std::vector<Marker> markers;
+        _aruco_detector->find_markers(img, markers);
+        if (markers.size() == 0)
         {
             if (_gui)
-                set_render_data(img.clone(), {}, {});
+                set_render_data(img.clone(), {});
             return;
         }
 
-        std::vector<MarkerPose> poses;
-        _aruco_detector->get_markers_poses(locations, poses);
-        if (poses.size() == 0)
-        {
-            if (_gui)
-                set_render_data(img.clone(), locations, {});
-            return;
-        }
-
-        bool ok = _publisher->publish(raw.frame_timestamp, poses);
+        bool ok = _publisher->publish(raw.frame_timestamp, markers);
         if (!ok)
             _stop = true;
 
         if (_gui)
-        {
-            set_render_data(img.clone(), locations, poses);
-        }
+            set_render_data(img.clone(), markers);
     }
 
     bool run()

@@ -10,44 +10,17 @@
 #include <cppmisc/misc.h>
 #include <iostream>
 
-struct RenderData
+
+template <typename T, int N>
+inline std::string format_points(cv::Matx<T, N, 2> const& pts)
 {
-    cv::Mat img;
-    std::vector<MarkerLoc> locations;
-    std::vector<MarkerPose> poses;
-};
-
-class Render
-{
-public:
-    Render()
-    {
-        cv::namedWindow("aruco tracker", 0);
-    }
-
-    ~Render()
-    {
-        cv::destroyWindow("aruco tracker");
-    }
-
-    bool update(ArucoDetector const& detector, RenderData const& rendata)
-    {
-        auto const& img = rendata.img;
-        auto const& locations = rendata.locations;
-        auto const& poses = rendata.poses;
-        if (img.total() == 0)
-            return true;
-        cv::Mat plot;
-        cv::cvtColor(img, plot, cv::COLOR_GRAY2BGR);
-        detector.draw_markers(plot, locations);
-        detector.draw_frames(plot, poses);
-        cv::imshow("aruco tracker", plot);
-        int val = cv::waitKey(25);
-        if (val == 27)
-            return false;
-        return true;
-    }
-};
+    std::stringstream ss;
+    ss << "[";
+    for (int i = 0; i < N; ++ i)
+        ss << pts(i, 0) << ", " << pts(i, 1) << (i == N - 1 ? "" : "; ");
+    ss << "]";
+    return ss.str();
+}
 
 class MainProcessor
 {
@@ -74,27 +47,22 @@ private:
     bool process_sample(std::string const& impath)
     {
         cv::Mat im = cv::imread(impath, 0);
-        std::vector<MarkerLoc> locations;
-        _aruco_detector->find_markers(im, locations);
-        if (locations.size() == 0)
+        std::vector<Marker> markers;
+        _aruco_detector->find_markers(im, markers);
+        if (markers.size() == 0)
         {
             info_msg("no markers found in ", impath);
             return false;
         }
 
-        std::vector<MarkerPose> poses;
-        _aruco_detector->get_markers_poses(locations, poses);
-        if (poses.size() == 0)
-        {
-            info_msg("can't estimated marker pose in ", impath);
-            return false;
-        }
-
         info_msg("found markers:");
 
-        for (auto const& pose : poses)
+        for (auto const& marker : markers)
         {
-            info_msg(pose.id, ": ", pose.pose.p, ", ", pose.pose.r);
+            info_msg("found #", marker.id, ":");
+            info_msg("  corners:     ", format_points(marker.corners));
+            info_msg("  world pose:  ", marker.world_marker_pose.p, ", ", marker.world_marker_pose.r);
+            info_msg("  camera pose: ", marker.camera_marker_pose.p, ", ", marker.camera_marker_pose.r);
         }
 
         return true;
