@@ -7,8 +7,8 @@
 
 struct Pose
 {
-    cv::Vec3d r; // rotation (in rodrigues)
     cv::Vec3d p; // displacement (in meters)
+    cv::Vec3d r; // rotation (in rodrigues)
 };
 
 struct PoseCov : Pose

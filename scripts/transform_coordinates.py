@@ -1,32 +1,34 @@
 import numpy as np
 from scipy.linalg import expm, logm
+from quat import quat_rot, quat_mul, quat_conj
+import json
 
-def wedge(a):
-	x,y,z = a
-	return np.array([
-		[ 0, -z,  y],
-		[ z,  0, -x],
-		[-y,  x,  0]
-	])
 
-def vee(A):
-	return A[[2,0,1], [1,2,0]]
+def pose_compose(pose_ab, pose_bc):
+    p_ab, q_ab = pose_ab
+    p_bc, q_bc = pose_bc
+    q_ac = quat_mul(q_ab, q_bc)
+    p_ac = p_ab + quat_rot(q_ab, p_bc)
+    return (p_ac, q_ac)
 
-np.set_printoptions(suppress=True)
-r = np.array([0.7, -1.5, -0.9])
-R = expm(wedge(r))
-r2 = vee(logm(R))
+def pose_inverse(pose):
+    p, q = pose
+    q_inv = quat_conj(q)
+    return (-quat_rot(q_inv, p), q_inv)
 
-S = (R - R.T) / 2
-v = np.array([S[2,1], S[0, 2], S[1, 0]])
-# nv = np.linalg.norm(v)
-# print(nv)
-# theta = np.arcsin(nv)
-# r = v / nv
-# print(r * theta)
-# print(v * np.sin(theta) / nv)
+def load_parameters(path):
+    with open(path) as f:
+        par = json.load(f)
+        return par
 
-l = v / np.linalg.norm(v)
-theta = np.arccos((np.trace(R) - 1) / 2)
+def get_json_pose(obj):
+    return (np.array(obj['position'], float), np.array(obj['orientation'], float))
 
-print(l * theta)
+def main():
+    par = load_parameters('dataset/parameters.json')
+    world_cam_pose = get_json_pose(par['camera'])
+    world_marker_pose = get_json_pose(par['marker']['pose'][0])
+    cam_marker_pose = pose_compose(pose_inverse(world_cam_pose), world_marker_pose)
+    print(cam_marker_pose)
+
+main()
