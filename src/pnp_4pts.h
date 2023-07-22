@@ -1,8 +1,9 @@
 #pragma once
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
-#include <cppmath/math.h>
+#include "math.h"
 #include "cvmath.h"
+#include "camera_parameters.h"
 
 
 /**

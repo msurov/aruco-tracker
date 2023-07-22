@@ -7,10 +7,10 @@
 #include "edges_fitting.h"
 #include "pnp_4pts.h"
 #include "cvmath.h"
-#include "json_cvmat.h"
+#include "json_loaders.h"
 
 
-cv::Ptr<cv::aruco::Dictionary> ArucoDetector::get_dict(std::string const& name)
+ArucoDetector::DictionaryPtr ArucoDetector::get_dict(std::string const& name)
 {
     std::map<std::string, cv::aruco::PREDEFINED_DICTIONARY_NAME> dicts = {
         {"4x4x50", cv::aruco::DICT_4X4_50},
@@ -38,14 +38,19 @@ cv::Ptr<cv::aruco::Dictionary> ArucoDetector::get_dict(std::string const& name)
     return cv::aruco::getPredefinedDictionary(p->second);
 }
 
-ArucoDetector::ArucoDetector(std::string const& dict_name, float marker_side_meters, CameraIntrinsics const& intr)
+ArucoDetector::ArucoDetector(
+    std::string const& dict_name,
+    double marker_side_meters,
+    CameraIntrinsics const& intr,
+    Pose const& cam_pose
+    )
 {
     _dict = get_dict(dict_name);
     _img_side_to_scan = 1024;
     _min_quad_diag = 15;
     _intr = intr;
     _marker_side = marker_side_meters;
-    _obj_pts = cv::Matx<double,4,3>(
+    _obj_pts = Mat43d(
         0.f, _marker_side, 0.f,
         _marker_side, _marker_side, 0.f,
         _marker_side, 0.f, 0.f,
@@ -53,6 +58,7 @@ ArucoDetector::ArucoDetector(std::string const& dict_name, float marker_side_met
     );
     _reprojection_err_threshold = 1.0;
     _max_marker_view_angle = 60 * M_PI / 180;
+    _pose_world_cam = cam_pose;
 }
 
 inline double dist(cv::Vec2d const& a, cv::Vec2d const& b)
@@ -148,7 +154,7 @@ bool ArucoDetector::get_marker_pose(MarkerLoc const& marker, PoseCov& pose)
         dbg_msg("solution pnp for marker ", marker.id, " has too big error: ", err);
         return false;
     }
-    auto R = rodrigues_to_rotmat(pose.r);
+    const auto R = rotmat(pose.r);
     cv::Vec3d ez {R(0,2), R(1,2), R(2,2)};
     double angle = angle_between(ez, -pose.p);
     if (angle > _max_marker_view_angle)
@@ -175,7 +181,7 @@ bool ArucoDetector::get_markers_poses(
         PoseCov pose;
         bool ans = get_marker_pose(marker, pose);
         if (ans)
-            poses.emplace_back(marker.id, pose);
+            poses.emplace_back(marker.id, compose(_pose_world_cam, pose));
         else
             result = false;
     }
@@ -185,11 +191,12 @@ bool ArucoDetector::get_markers_poses(
 
 ArucoDetectorPtr create_aruco_detector(Json::Value const& cfg)
 {
-    float marker_side = json_get<float>(cfg, "marker_side");
-    auto markers_dict = json_get<std::string>(cfg, "markers_dict");
-    auto cam_intrinsics = json_get<CameraIntrinsics>(cfg, "camera_intrinsics");
+    const double marker_side = json_get<double>(cfg, "marker_side");
+    const auto markers_dict = json_get<std::string>(cfg, "markers_dict");
+    const auto cam_intrinsics = json_get<CameraIntrinsics>(cfg, "camera_intrinsics");
+    const auto cam_pose = json_get<Pose>(cfg, "camera_pose");
     return std::make_shared<ArucoDetector>(
-        markers_dict, marker_side, cam_intrinsics
+        markers_dict, marker_side, cam_intrinsics, cam_pose
     );
 }
 
@@ -226,9 +233,9 @@ void ArucoDetector::draw_frame(cv::Mat& plot, MarkerPose const& pose) const
 
     std::vector<cv::Point3f> objorths = {
         {0.f, 0.f, 0.f},
-        {_marker_side / 2, 0.f, 0.f},
-        {0.f, _marker_side / 2, 0.f},
-        {0.f, 0.f, _marker_side / 2}
+        {float(_marker_side / 2), 0.f, 0.f},
+        {0.f, float(_marker_side / 2), 0.f},
+        {0.f, 0.f, float(_marker_side / 2)}
     };
     std::vector<cv::Point2f> impts(4);
 

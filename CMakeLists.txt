@@ -2,10 +2,11 @@ cmake_minimum_required(VERSION 3.2)
 
 project(aruco_tracker CXX)
 
-add_subdirectory(3rd_party/cppmisc)
-add_subdirectory(3rd_party/cppmath)
-add_subdirectory(3rd_party/networking)
+enable_testing(True)
+set(CMAKE_CXX_STANDARD 17)
 
+add_subdirectory(3rd_party/cppmisc)
+add_subdirectory(3rd_party/networking)
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -15,6 +16,7 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W2")
 else()
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Ofast")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 endif()
 
@@ -25,7 +27,7 @@ set(CAMERA_SRC
     src/camera.h
     src/camera.cpp
 )
-set(CAMERA_DEPS ${OpenCV_LIBS})
+set(CAMERA_DEPS "")
 
 if (WITH_FAKE_CAMERA)
     set(CAMERA_SRC ${CAMERA_SRC} src/camera_fake.cpp)
@@ -40,12 +42,6 @@ if (WITH_BASLER_CAMERA)
     add_definitions(-DBUILD_BASLER_CAMERA)
 endif()
 
-add_executable(recorder 
-    ${CAMERA_SRC}
-    src/recorder.cpp
-)
-target_link_libraries(recorder PUBLIC cppmisc ${CAMERA_DEPS})
-
 add_executable(aruco_tracker
     src/aruco_detector.h
     src/aruco_detector.cpp
@@ -58,13 +54,35 @@ add_executable(aruco_tracker
     src/publisher.cpp
     src/publisher_file.cpp
     src/publisher_jsontcp.cpp
-    src/aruco_tracker.cpp
+    src/aruco_tracker_main.cpp
+    src/json_loaders.h
+    src/json_loaders.cpp
     ${CAMERA_SRC}
 )
 target_link_libraries(aruco_tracker PUBLIC
     cppmisc
-    cppmath
     networking
     ${CMAKE_THREAD_LIBS_INIT}
     ${CAMERA_DEPS}
+    ${OpenCV_LIBS}
 )
+
+add_executable(aruco_detector
+    src/aruco_detector.h
+    src/aruco_detector.cpp
+    src/edges_fitting.h
+    src/pnp_4pts.h
+    src/pnp_4pts.cpp
+    src/imgdump.cpp
+    src/imgdump.h
+    src/aruco_detector_main.cpp
+    src/json_loaders.h
+    src/json_loaders.cpp
+)
+target_link_libraries(aruco_detector PUBLIC
+    cppmisc
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${OpenCV_LIBS}
+)
+
+add_subdirectory(tests)

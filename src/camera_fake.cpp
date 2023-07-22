@@ -134,7 +134,7 @@ public:
         _period_ms = int(1e+3f / fps);
         this->_bexit = true;
         this->_sources_format = image_type;
-        _files = move(get_files(files_mask));
+        _files = get_files(files_mask);
 
         if (_files.empty())
             throw_runtime_error("there are no files in ", files_mask);

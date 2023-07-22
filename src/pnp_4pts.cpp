@@ -1,4 +1,5 @@
 #include "pnp_4pts.h"
+#include "rotations.h"
 
 
 cv::Matx<double,8,6> pnp_jac(
@@ -8,7 +9,7 @@ cv::Matx<double,8,6> pnp_jac(
     cv::Matx<double,4,3> const& objpts
     )
 {
-    cv::Matx33d R = rodrigues_to_rotmat(r);
+    cv::Matx33d R = rotmat(r);
     cv::Matx<double,8,6> Jac;
 
     for (int i = 0; i < 4; ++ i)

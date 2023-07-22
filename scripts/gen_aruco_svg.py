@@ -141,7 +141,7 @@ def get_dict_cfg(s):
 
 
 def getMarkerBitmask(dictionary, marker_id):
-    return dictionary.drawMarker(marker_id, dictionary.markerSize + 2)
+    return cv2.aruco.generateImageMarker(dictionary, marker_id, dictionary.markerSize + 2)
 
 
 def gen_sample(dictionary, marker_id):

@@ -105,14 +105,6 @@ fit_line(
     return true;
 }
 
-static cv::Point2f normalized(cv::Point2f const& p)
-{
-    float n2 = p.dot(p);
-    if (n2 < 1e-12)
-        return cv::Point2f(0, 0);
-    return p / sqrtf(n2);
-}
-
 static cv::RotatedRect get_neib_rect(cv::Point2d const& p1, cv::Point2d const& p2, float sz)
 {
     cv::Point2d center = (p1 + p2) * 0.5f;

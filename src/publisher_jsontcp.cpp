@@ -23,7 +23,7 @@ public:
 
 
 static const char __markerpose_templ[] = 
-R"({"id": "%d", "p": [%e, %e, %e], "r": [%e, %e, %e], "pr_cov": [%e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e, %e]})";
+R"({"id": "%d", "p": [%e, %e, %e], "r": [%e, %e, %e]})";
 
 static const int __markerpose_bufsz = sizeof(__markerpose_templ) + 4 + (3 + 3 + 21) * 16;
 
@@ -39,45 +39,12 @@ inline int to_jsonstr(MarkerPose const& marker_pose, char* buf, int buf_sz)
     double py = marker_pose.pose.p(1);
     double pz = marker_pose.pose.p(2);
 
-    double rx_rx = marker_pose.pose.cov(0,0);
-    double rx_ry = marker_pose.pose.cov(0,1);
-    double rx_rz = marker_pose.pose.cov(0,2);
-    double rx_px = marker_pose.pose.cov(0,3);
-    double rx_py = marker_pose.pose.cov(0,4);
-    double rx_pz = marker_pose.pose.cov(0,5);
-
-    double ry_ry = marker_pose.pose.cov(1,1);
-    double ry_rz = marker_pose.pose.cov(1,2);
-    double ry_px = marker_pose.pose.cov(1,3);
-    double ry_py = marker_pose.pose.cov(1,4);
-    double ry_pz = marker_pose.pose.cov(1,5);
-
-    double rz_rz = marker_pose.pose.cov(2,2);
-    double rz_px = marker_pose.pose.cov(2,3);
-    double rz_py = marker_pose.pose.cov(2,4);
-    double rz_pz = marker_pose.pose.cov(2,5);
-
-    double px_px = marker_pose.pose.cov(3,3);
-    double px_py = marker_pose.pose.cov(3,4);
-    double px_pz = marker_pose.pose.cov(3,5);
-
-    double py_py = marker_pose.pose.cov(4,4);
-    double py_pz = marker_pose.pose.cov(4,5);
-
-    double pz_pz = marker_pose.pose.cov(5,5);
-
     return snprintf(
         buf, buf_sz,
         __markerpose_templ, 
         id,
         px, py, pz,
-        rx, ry, rz,
-        px_px, px_py, px_pz, rx_px, ry_px, rz_px, 
-               py_py, py_pz, rx_py, ry_py, rz_py, 
-                      pz_pz, rx_pz, ry_pz, rz_pz, 
-                             rx_rx, rx_ry, rx_rz, 
-                                    ry_ry, ry_rz, 
-                                           rz_rz
+        rx, ry, rz
     );
 }
 

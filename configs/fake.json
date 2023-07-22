@@ -5,17 +5,20 @@
 
     "aruco": {
         "markers_dict": "5x5x1000",
-        "marker_side": 40.0e-3,
-
+        "marker_side": 80.0e-3,
         "camera_intrinsics": {
             "K": [
-                [700, 0, 960],
-                [0, 700, 540],
-                [0, 0, 1]
+              [1280.0, 0, 960.0 ],
+              [0, 1280.0, 540.0 ],
+              [0, 0, 1]
             ],
             "distortion": [0, 0, 0, 0, 0],
-            "calibration_tolerance": 0.119670,
+            "calibration_tolerance": 0.0,
             "resolution": [1080, 1920]
+        },
+        "camera_pose": {
+            "position": [1.9740146398544312, 2.0286037921905518, -1.4990243911743164],
+            "orientation": [0.7467635454245646, 0.4660553210498401, -0.24530256456840102, -0.40615673915648615]
         }
     },
 
@@ -24,7 +27,7 @@
     },
 
     "fake_camera": {
-        "files_mask": "data/VID_20220629_092822-out/*.png",
+        "files_mask": "dataset/*.png",
         "image_type": "gray",
         "fps": 5
     }
