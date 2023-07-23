@@ -3,34 +3,18 @@
 #include "transforms.h"
 
 
-enum MarkerStatus : uint32_t
-{
-    Fine = 0,
-
-    TooAcuteViewAngle = 1 << 1,
-    IncorrectVertices = 1 << 2,
-    FittingFailed = 1 << 3,
-    TooSmall = 1 << 4,
-
-    PoseEstimationFailed = 1 << 16,
-    BigReprojectionError = 1 << 17,
-};
-
-inline MarkerStatus operator | (MarkerStatus const& a, MarkerStatus const& b)
-{
-    return static_cast<MarkerStatus>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-
-inline MarkerStatus operator |= (MarkerStatus& a, MarkerStatus b)
-{
-    a = a | b;
-    return a;
-}
-
 struct Marker
 {
+    static const uint32_t CornersFound = 1 << 0;
+    static const uint32_t PoseFound = 1 << 1;
+    static const uint32_t TooAcuteViewAngle = 1 << 8;
+    static const uint32_t IncorrectVertices = 1 << 9;
+    static const uint32_t TooSmall = 1 << 10;
+    static const uint32_t BigReprojectionError = 1 << 11;
+    static const uint32_t FittingFailed = 1 << 12;
+
     int id = -1;
-    MarkerStatus status = Fine;
+    uint32_t flags = 0;
     cv::Matx<double, 4, 2> corners;
     cv::Matx<double, 8, 8> corners_cov;
     double reprojection_error = -1.;

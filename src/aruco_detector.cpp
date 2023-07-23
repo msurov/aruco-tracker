@@ -103,10 +103,11 @@ void ArucoDetector::find_markers(cv::Mat const& gray, std::vector<Marker>& marke
         auto& marker = markers[i];
         marker.id = ids[i];
 
+        marker.flags &= ~Marker::CornersFound;
+
         if (polygon.size() != 4)
         {
-            warn_msg("opencv gave marker with incorrect number of vertices");
-            marker.status |= IncorrectVertices;
+            marker.flags |= Marker::IncorrectVertices;
             continue;
         }
 
@@ -121,16 +122,18 @@ void ArucoDetector::find_markers(cv::Mat const& gray, std::vector<Marker>& marke
         double diag = quad_min_diag(quad);
         if (diag < 15.0)
         {
-            marker.status |= TooSmall;
+            marker.flags |= Marker::TooSmall;
             continue;
         }
 
         bool ok = refine_quad(gray, quad, 25, marker.corners, marker.corners_cov);
         if (!ok)
         {
-            marker.status |= FittingFailed;
+            marker.flags |= Marker::FittingFailed;
             continue;
         }
+
+        marker.flags |= Marker::CornersFound;
     
         if (get_marker_pose(marker))
             marker.world_marker_pose = compose(_world_camera_pose, marker.camera_marker_pose);
@@ -148,23 +151,23 @@ bool ArucoDetector::get_marker_pose(Marker& marker)
     auto& r = marker.camera_marker_pose.r;
     auto& cov = marker.camera_marker_pose.cov;
 
+    marker.flags &= ~Marker::PoseFound;
+
     bool ok = solve_pnp_4pts(_obj_pts, marker.corners, marker.corners_cov, _intr, r, p, cov);
     if (!ok)
-    {
-        marker.status |= PoseEstimationFailed;
         return false;
-    }
 
     marker.reprojection_error = reprojection_error(_obj_pts, marker.corners, _intr, r, p);
     if (marker.reprojection_error > _reprojection_err_threshold)
-        marker.status |= BigReprojectionError;
+        marker.flags |= Marker::BigReprojectionError;
 
     const auto R = rotmat(r);
     const cv::Vec3d ez {R(0,2), R(1,2), R(2,2)};
     const double angle = angle_between(ez, -p);
     if (angle > _max_marker_view_angle)
-        marker.status |= TooAcuteViewAngle;
+        marker.flags |= Marker::TooAcuteViewAngle;
     
+    marker.flags |= Marker::PoseFound;
     return true;
 }
 
